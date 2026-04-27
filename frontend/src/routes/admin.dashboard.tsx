@@ -4,7 +4,7 @@ import { Users, CreditCard, AlertCircle, TrendingUp } from "lucide-react";
 
 export const Route = createFileRoute("/admin/dashboard")({
   beforeLoad: ({ context }) => {
-    if (!context.auth.isAuthenticated || context.auth.user?.role !== "admin") {
+    if (!context.auth.isAuthenticated || context.auth.user?.role !== "ADMIN") {
       throw redirect({
         to: "/admin/login",
       });

@@ -42,7 +42,7 @@ function LoginComponent() {
 
   async function onSubmit(data: LoginFormValues) {
     try {
-      await login(data.email, "user");
+      await login(data.email, data.password);
       toast.success("Logged in successfully!");
       navigate({ to: "/" });
     } catch (error) {

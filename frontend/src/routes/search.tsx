@@ -2,8 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Search, ArrowRight, Sparkles } from "lucide-react";
-import { invoices } from "@/lib/mock";
 import { toast } from "sonner";
+import axios from "axios";
 
 export const Route = createFileRoute("/search")({
   head: () => ({
@@ -21,25 +21,26 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !email) {
       toast.error("Both fields are required");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      const found = invoices.find((i) => i.id.toLowerCase() === id.toLowerCase() && i.email.toLowerCase() === email.toLowerCase());
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices/search`, {
+        params: { invoiceNumber: id, email }
+      });
+      const found = response.data.data;
+      toast.success("Invoice found");
+      navigate({ to: "/pay/$id", params: { id: found._id } });
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Invoice not found";
+      toast.error(message);
+    } finally {
       setLoading(false);
-      if (found) {
-        toast.success("Invoice found");
-        navigate({ to: "/pay/$id", params: { id: found.id } });
-      } else {
-        // Demo: still navigate to first invoice
-        toast("Demo lookup — opening sample invoice");
-        navigate({ to: "/pay/$id", params: { id: invoices[0].id } });
-      }
-    }, 700);
+    }
   };
 
   return (

@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { formatINR } from "@/lib/mock";
 import { ArrowLeft, Send, Save, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import axios from "axios";
 
 export const Route = createFileRoute("/invoices/new")({
   head: () => ({
@@ -64,17 +65,45 @@ function CreateInvoice() {
   const [amount, setAmount] = useState("");
   const [due, setDue] = useState("");
   const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   const amountNum = Number(amount.replace(/[^0-9.]/g, "")) || 0;
   const tax = Math.round(amountNum * 0.18);
   const total = amountNum + tax;
 
-  const handleSend = () => {
-    if (!client || !email || !amountNum) {
-      toast.error("Please fill client name, email and amount");
+  const handleSend = async () => {
+    if (!client || !email || !amountNum || !due) {
+      toast.error("Please fill client name, email, amount and due date");
       return;
     }
-    toast.success("Invoice sent!", { description: `${client} · ${formatINR(total)}` });
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      await axios.post(`${import.meta.env.VITE_API_URL}/invoices`, {
+        clientName: client,
+        clientEmail: email,
+        amount: total, // Saving the total amount
+        dueDate: due,
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      toast.success("Invoice created successfully!", { 
+        description: `${client} · ${formatINR(total)}` 
+      });
+      
+      // Navigate back to invoices list
+      navigate({ to: "/invoices" });
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Failed to create invoice";
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -121,14 +150,16 @@ function CreateInvoice() {
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handleSend}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium shadow-glow hover:scale-[1.02] transition-all"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium shadow-glow hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100"
               >
                 <Send className="h-4 w-4" />
-                Send invoice
+                {isSubmitting ? "Creating..." : "Send invoice"}
               </button>
               <button
+                disabled={isSubmitting}
                 onClick={() => toast("Saved as draft")}
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
                 Save draft

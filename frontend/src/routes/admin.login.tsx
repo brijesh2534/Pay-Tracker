@@ -43,7 +43,7 @@ function AdminLoginComponent() {
   async function onSubmit(data: AdminLoginFormValues) {
     try {
       // Mock admin login
-      await login(data.adminEmail, "admin");
+      await login(data.adminEmail, data.adminCode);
       toast.success("Admin access granted!");
       navigate({ to: "/admin/dashboard" });
     } catch (error) {

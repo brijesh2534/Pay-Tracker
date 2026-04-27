@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { invoices as seed, formatINR, type InvoiceStatus } from "@/lib/mock";
+import { formatINR, type InvoiceStatus } from "@/lib/mock";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ArrowUpDown, Download, Plus, Search } from "lucide-react";
+import { ArrowUpDown, Download, Plus, Search, Loader2 } from "lucide-react";
+import axios from "axios";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({
@@ -20,20 +22,73 @@ const filters: ("all" | InvoiceStatus)[] = ["all", "paid", "pending", "overdue"]
 function InvoiceList() {
   const [filter, setFilter] = useState<(typeof filters)[number]>("all");
   const [q, setQ] = useState("");
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      try {
+        const token = localStorage.getItem("pay_tracker_token");
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setInvoices(response.data.data);
+      } catch (error: any) {
+        toast.error("Failed to load invoices");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInvoices();
+  }, []);
 
   const rows = useMemo(() => {
-    return seed.filter((i) => {
-      const matchFilter = filter === "all" || i.status === filter;
-      const matchQ = q === "" || `${i.client} ${i.id} ${i.email}`.toLowerCase().includes(q.toLowerCase());
+    return invoices.filter((i) => {
+      const status = i.status.toLowerCase() as InvoiceStatus;
+      const matchFilter = filter === "all" || status === filter;
+      const matchQ = q === "" || 
+        `${i.clientName} ${i.invoiceNumber} ${i.clientEmail}`.toLowerCase().includes(q.toLowerCase());
       return matchFilter && matchQ;
     });
-  }, [filter, q]);
+  }, [filter, q, invoices]);
 
   const counts = {
-    all: seed.length,
-    paid: seed.filter((i) => i.status === "paid").length,
-    pending: seed.filter((i) => i.status === "pending").length,
-    overdue: seed.filter((i) => i.status === "overdue").length,
+    all: invoices.length,
+    paid: invoices.filter((i) => i.status === "PAID").length,
+    pending: invoices.filter((i) => i.status === "PENDING").length,
+    overdue: invoices.filter((i) => i.status === "OVERDUE").length,
+    draft: 0
+  };
+
+  const handleExport = () => {
+    if (rows.length === 0) {
+      toast.error("No invoices to export");
+      return;
+    }
+
+    const headers = ["Invoice #", "Client Name", "Client Email", "Amount", "Due Date", "Status"];
+    const csvRows = rows.map((inv) => [
+      inv.invoiceNumber,
+      `"${inv.clientName}"`, // Handle names with commas
+      inv.clientEmail,
+      inv.amount,
+      new Date(inv.dueDate).toISOString().split('T')[0],
+      inv.status,
+    ]);
+
+    const csvContent = [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `invoices_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Invoices exported successfully");
   };
 
   return (
@@ -42,10 +97,15 @@ function InvoiceList() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Invoices</h1>
-            <p className="text-sm text-muted-foreground mt-1">{seed.length} total · {counts.overdue} need attention</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {invoices.length} total · {counts.overdue} need attention
+            </p>
           </div>
           <div className="flex gap-2">
-            <button className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-accent transition-colors shadow-card">
+            <button 
+              onClick={handleExport}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium hover:bg-accent transition-colors shadow-card"
+            >
               <Download className="h-4 w-4" />
               Export
             </button>
@@ -100,46 +160,56 @@ function InvoiceList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((inv, idx) => (
-                  <tr
-                    key={inv.id}
-                    className="group hover:bg-accent/40 transition-colors animate-fade-up"
-                    style={{ animationDelay: `${idx * 30}ms`, animationDuration: "300ms" }}
-                  >
-                    <td className="px-5 py-3.5 font-mono text-xs font-medium text-foreground">{inv.id}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center text-[11px] font-semibold">
-                          {inv.client.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                        </div>
-                        <div>
-                          <div className="font-medium">{inv.client}</div>
-                          <div className="text-xs text-muted-foreground">{inv.email}</div>
-                        </div>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-24 text-center">
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                        <p>Loading invoices...</p>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 font-semibold tabular-nums">{formatINR(inv.amount)}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground">
-                      {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                    </td>
-                    <td className="px-5 py-3.5"><StatusBadge status={inv.status} /></td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Link
-                        to="/pay/$id"
-                        params={{ id: inv.id }}
-                        className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        View →
-                      </Link>
-                    </td>
                   </tr>
-                ))}
-                {rows.length === 0 && (
+                ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                      No invoices match your filters.
+                      No invoices found.
                     </td>
                   </tr>
+                ) : (
+                  rows.map((inv, idx) => (
+                    <tr
+                      key={inv._id}
+                      className="group hover:bg-accent/40 transition-colors animate-fade-up"
+                      style={{ animationDelay: `${idx * 30}ms`, animationDuration: "300ms" }}
+                    >
+                      <td className="px-5 py-3.5 font-mono text-xs font-medium text-foreground">{inv.invoiceNumber}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 rounded-lg bg-primary-soft text-primary flex items-center justify-center text-[11px] font-semibold">
+                            {inv.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                          </div>
+                          <div>
+                            <div className="font-medium">{inv.clientName}</div>
+                            <div className="text-xs text-muted-foreground">{inv.clientEmail}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 font-semibold tabular-nums">{formatINR(inv.amount)}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">
+                        {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                      <td className="px-5 py-3.5"><StatusBadge status={inv.status.toLowerCase() as InvoiceStatus} /></td>
+                      <td className="px-5 py-3.5 text-right">
+                        <Link
+                          to="/pay/$id"
+                          params={{ id: inv._id }}
+                          className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          View →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

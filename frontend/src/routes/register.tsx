@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 
 const registerSchema = z.object({
@@ -22,6 +21,8 @@ const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
+  businessName: z.string().optional(),
+  upiId: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/register")({
 });
 
 function RegisterComponent() {
-  const { login } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   
   const form = useForm<RegisterFormValues>({
@@ -44,17 +45,17 @@ function RegisterComponent() {
       email: "",
       password: "",
       confirmPassword: "",
+      businessName: "",
+      upiId: "",
     },
   });
 
   async function onSubmit(data: RegisterFormValues) {
     try {
-      // Mock registration - in a real app, you'd call a register API
-      await login(data.email, "user");
-      toast.success("Account created successfully!");
-      navigate({ to: "/" });
+      await register(data);
+      navigate({ to: "/login" });
     } catch (error) {
-      toast.error("Failed to register. Please try again.");
+      // Error handled by AuthProvider toast
     }
   }
 
@@ -79,32 +80,63 @@ function RegisterComponent() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Full Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="name@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="name@example.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="businessName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Business Name (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Brightlabs" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="upiId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UPI ID (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="user@upi" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <FormField
                 control={form.control}
                 name="password"

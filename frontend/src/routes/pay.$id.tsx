@@ -1,76 +1,61 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { invoices, formatINR } from "@/lib/mock";
-import { ShieldCheck, Copy, Check, ArrowRight, Lock } from "lucide-react";
+import { formatINR } from "@/lib/mock";
+import { ShieldCheck, Copy, Check, ArrowRight, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import axios from "axios";
 
 export const Route = createFileRoute("/pay/$id")({
-  loader: ({ params }) => {
-    const inv = invoices.find((i) => i.id === params.id) ?? invoices[0];
-    if (!inv) throw notFound();
-    return inv;
+  loader: async ({ params }) => {
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices/${params.id}`);
+      return response.data.data;
+    } catch (error) {
+      throw notFound();
+    }
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: `Pay ${loaderData?.id ?? "invoice"} — Brightlabs Studio` },
+      { title: `Pay ${loaderData?.invoiceNumber ?? "invoice"} — Pay Tracker` },
       { name: "description", content: "Secure payment via UPI or Razorpay." },
     ],
   }),
   component: PublicPay,
 });
 
-const UPI_ID = "brightlabs@hdfcbank";
-
-// Inline SVG QR placeholder (decorative grid that looks like a real QR)
-function QRCode() {
-  return (
-    <svg viewBox="0 0 200 200" className="w-full h-full">
-      <rect width="200" height="200" fill="white" rx="12" />
-      {Array.from({ length: 21 }).map((_, r) =>
-        Array.from({ length: 21 }).map((_, c) => {
-          // deterministic pseudo-random pattern
-          const v = (r * 31 + c * 17 + r * c) % 7;
-          if (v < 3) return null;
-          return <rect key={`${r}-${c}`} x={10 + c * 8.5} y={10 + r * 8.5} width="8" height="8" fill="#0F172A" rx="1" />;
-        }),
-      )}
-      {/* finder squares */}
-      {[
-        [10, 10],
-        [148, 10],
-        [10, 148],
-      ].map(([x, y], i) => (
-        <g key={i}>
-          <rect x={x} y={y} width="42" height="42" fill="white" />
-          <rect x={x} y={y} width="42" height="42" fill="none" stroke="#0F172A" strokeWidth="6" rx="4" />
-          <rect x={x + 12} y={y + 12} width="18" height="18" fill="#0F172A" rx="2" />
-        </g>
-      ))}
-    </svg>
-  );
-}
 
 function PublicPay() {
   const inv = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [status, setStatus] = useState(inv.status);
 
   const tax = Math.round(inv.amount * 0.18);
   const total = inv.amount + tax;
+  const upiId = inv.sme?.upiId || "merchant@upi";
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(inv.sme?.businessName || inv.sme?.name)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Invoice ${inv.invoiceNumber}`)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
 
   const copy = async () => {
-    await navigator.clipboard.writeText(UPI_ID);
+    await navigator.clipboard.writeText(upiId);
     setCopied(true);
     toast.success("UPI ID copied");
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
     setPaying(true);
-    setTimeout(() => {
-      setPaying(false);
+    try {
+      await axios.patch(`${import.meta.env.VITE_API_URL}/invoices/${inv._id}/status`, {
+        status: "PAID"
+      });
+      setStatus("PAID");
       toast.success("Payment successful!", { description: `${formatINR(total)} received` });
-    }, 1600);
+    } catch (error) {
+      toast.error("Failed to update payment status");
+    } finally {
+      setPaying(false);
+    }
   };
 
   return (
@@ -97,14 +82,14 @@ function PublicPay() {
             <div className="flex items-start justify-between mb-6">
               <div>
                 <div className="h-10 w-10 rounded-xl gradient-primary mb-3" />
-                <div className="text-base font-semibold">Brightlabs Studio Pvt Ltd</div>
-                <div className="text-xs text-muted-foreground">GSTIN: 27AABCB1234X1Z5</div>
+                <div className="text-base font-semibold">{inv.sme?.businessName || "Business Merchant"}</div>
+                <div className="text-xs text-muted-foreground">{inv.sme?.name}</div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Invoice</div>
-                <div className="font-mono text-base font-semibold">{inv.id}</div>
+                <div className="font-mono text-base font-semibold">{inv.invoiceNumber}</div>
                 <div className="text-[11px] text-muted-foreground mt-1">
-                  Issued {new Date(inv.issuedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  Issued {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                 </div>
               </div>
             </div>
@@ -112,8 +97,8 @@ function PublicPay() {
             <div className="grid grid-cols-2 gap-6 py-5 border-y border-border">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Bill to</div>
-                <div className="text-sm font-semibold">{inv.client}</div>
-                <div className="text-xs text-muted-foreground">{inv.email}</div>
+                <div className="text-sm font-semibold">{inv.clientName}</div>
+                <div className="text-xs text-muted-foreground">{inv.clientEmail}</div>
               </div>
               <div className="text-right">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Due date</div>
@@ -140,8 +125,10 @@ function PublicPay() {
                 <div className="text-3xl font-semibold tracking-tight tabular-nums mt-1">{formatINR(total)}</div>
               </div>
               <div className="text-[11px] opacity-70 text-right">
-                Payable to<br />
-                <span className="font-medium opacity-100">Brightlabs Studio</span>
+                Status<br />
+                <span className={`font-medium uppercase tracking-wider ${status === 'PAID' ? 'text-success' : 'text-primary'}`}>
+                  {status}
+                </span>
               </div>
             </div>
           </div>
@@ -154,17 +141,25 @@ function PublicPay() {
                 <div className="text-base font-semibold mt-1">UPI · GPay · PhonePe · Paytm</div>
               </div>
 
-              <div className="mt-5 mx-auto w-52 h-52 rounded-2xl bg-white p-3 shadow-card animate-fade-in border border-border">
-                <QRCode />
+              <div className="mt-5 mx-auto w-52 h-52 rounded-2xl bg-white p-3 shadow-card animate-fade-in border border-border flex items-center justify-center overflow-hidden">
+                {status === "PAID" ? (
+                  <div className="flex flex-col items-center gap-2 text-success">
+                    <Check className="h-12 w-12" />
+                    <span className="text-xs font-bold uppercase">Paid</span>
+                  </div>
+                ) : (
+                  <img src={qrUrl} alt="Payment QR" className="w-full h-full object-contain" />
+                )}
               </div>
 
               <button
                 onClick={copy}
-                className="mt-5 w-full group flex items-center justify-between rounded-xl border border-border bg-muted/40 hover:bg-accent transition-colors px-3.5 py-2.5"
+                disabled={status === "PAID"}
+                className="mt-5 w-full group flex items-center justify-between rounded-xl border border-border bg-muted/40 hover:bg-accent transition-colors px-3.5 py-2.5 disabled:opacity-50"
               >
                 <div className="text-left">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">UPI ID</div>
-                  <div className="text-sm font-mono font-medium">{UPI_ID}</div>
+                  <div className="text-sm font-mono font-medium">{upiId}</div>
                 </div>
                 <span className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${copied ? "bg-success text-success-foreground scale-110" : "bg-card text-muted-foreground"}`}>
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -177,19 +172,30 @@ function PublicPay() {
                 <span className="flex-1 h-px bg-border" />
               </div>
 
+              {inv.paymentLink && status !== "PAID" && (
+                <button
+                  onClick={() => window.open(inv.paymentLink, "_blank")}
+                  className="w-full mb-3 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary text-primary px-4 py-3 text-sm font-bold hover:bg-primary/5 transition-all"
+                >
+                  Pay via Razorpay (Online)
+                </button>
+              )}
+
               <button
                 onClick={handlePay}
-                disabled={paying}
+                disabled={paying || status === "PAID"}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-semibold shadow-glow hover:scale-[1.02] transition-all disabled:opacity-70 disabled:scale-100"
               >
                 {paying ? (
                   <>
-                    <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Processing...
                   </>
+                ) : status === "PAID" ? (
+                  "Invoice Paid"
                 ) : (
                   <>
-                    Pay with Razorpay
+                    Confirm UPI/Manual Payment
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
@@ -209,7 +215,7 @@ function PublicPay() {
         </div>
 
         <p className="text-center text-[11px] text-muted-foreground mt-8">
-          Need help? Email <span className="font-medium text-foreground">support@brightlabs.in</span>
+          Need help? Email <span className="font-medium text-foreground">support@paytracker.com</span>
         </p>
       </main>
     </div>
