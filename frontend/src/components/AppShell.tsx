@@ -12,6 +12,7 @@ import {
   Clock,
   User,
   LogOut,
+  Eye,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -83,13 +84,13 @@ const initialNotifs: Notif[] = [
 
 import { useAuth } from "../auth";
 import { useNavigate } from "@tanstack/react-router";
+import { useNotifications } from "../context/NotificationContext";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [notifs, setNotifs] = useState<Notif[]>(initialNotifs);
-  const unreadCount = notifs.filter((n) => n.unread).length;
+  const { notifs, unreadCount, markAllRead, markAsRead } = useNotifications();
 
   const handleLogout = () => {
     logout();
@@ -97,8 +98,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     toast.success("Signed out successfully");
   };
 
-  const markAllRead = () => {
-    setNotifs((prev) => prev.map((n) => ({ ...n, unread: false })));
+  const handleMarkAllRead = () => {
+    markAllRead();
     toast.success("All notifications marked as read");
   };
 
@@ -207,7 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </div>
                   </div>
                   <button
-                    onClick={markAllRead}
+                    onClick={handleMarkAllRead}
                     className="text-xs font-medium text-primary hover:underline"
                   >
                     Mark all read
@@ -216,11 +217,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <div className="max-h-[380px] overflow-y-auto">
                   {notifs.map((n) => {
                     const Icon =
-                      n.type === "success"
+                      n.category === "payment"
                         ? CheckCircle2
-                        : n.type === "warning"
+                        : n.category === "overdue"
                           ? AlertTriangle
-                          : Clock;
+                          : n.category === "viewed"
+                            ? Eye
+                            : n.category === "report"
+                              ? FileText
+                              : n.category === "product"
+                                ? Sparkles
+                                : Bell;
+
                     const tone =
                       n.type === "success"
                         ? "text-success bg-success-soft"
@@ -230,13 +238,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     return (
                       <button
                         key={n.id}
-                        onClick={() =>
-                          setNotifs((prev) =>
-                            prev.map((x) =>
-                              x.id === n.id ? { ...x, unread: false } : x,
-                            ),
-                          )
-                        }
+                        onClick={() => markAsRead(n.id)}
                         className={`w-full flex items-start gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-accent/50 transition-colors text-left ${n.unread ? "bg-primary-soft/30" : ""
                           }`}
                       >

@@ -2,7 +2,8 @@ import { Router } from "express";
 import { 
     loginUser, 
     logoutUser, 
-    registerUser 
+    registerUser,
+    updateUserDetails
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -13,5 +14,6 @@ router.route("/login").post(loginUser);
 
 // Secured routes
 router.route("/logout").post(verifyJWT, logoutUser);
+router.route("/update-account").patch(verifyJWT, updateUserDetails);
 
 export default router;

@@ -66,12 +66,10 @@ const createInvoice = asyncHandler(async (req, res) => {
                 reminder_enable: true,
                 notes: {
                     invoice_number: invoiceNumber,
-                },
-                // We redirect back to the payment page to show success
-                callback_url: `${process.env.CORS_ORIGIN}/search`, 
-                callback_method: "get",
+                }
             });
             paymentLink = razorpayResponse.short_url;
+            var razorpayLinkId = razorpayResponse.id;
         } catch (error) {
             console.error("Razorpay Error:", error);
         }
@@ -86,6 +84,7 @@ const createInvoice = asyncHandler(async (req, res) => {
         invoiceNumber,
         token,
         paymentLink,
+        razorpayLinkId,
         paymentMethod: paymentMethod || "RAZORPAY",
         status: "PENDING"
     });
@@ -145,6 +144,25 @@ const createInvoice = asyncHandler(async (req, res) => {
 const getInvoices = asyncHandler(async (req, res) => {
     const invoices = await Invoice.find({ userId: req.user?._id }).sort({ createdAt: -1 });
 
+    // For each pending invoice with a Razorpay link, check its status
+    const razorpayInstance = getRazorpayInstance();
+    if (razorpayInstance) {
+        for (let i = 0; i < invoices.length; i++) {
+            if (invoices[i].status === "PENDING" && invoices[i].razorpayLinkId) {
+                try {
+                    const plink = await razorpayInstance.paymentLink.fetch(invoices[i].razorpayLinkId);
+                    if (plink.status === "paid") {
+                        invoices[i].status = "PAID";
+                        invoices[i].paidAt = new Date();
+                        await invoices[i].save();
+                    }
+                } catch (error) {
+                    console.error(`Failed to fetch status for ${invoices[i].invoiceNumber}:`, error);
+                }
+            }
+        }
+    }
+
     return res.status(200).json(
         new ApiResponse(200, invoices, "Invoices fetched successfully")
     );
@@ -159,6 +177,23 @@ const getInvoiceById = asyncHandler(async (req, res) => {
 
     if (!invoice) {
         throw new ApiError(404, "Invoice not found");
+    }
+
+    // Check Razorpay status if pending
+    if (invoice.status === "PENDING" && invoice.razorpayLinkId) {
+        const razorpayInstance = getRazorpayInstance();
+        if (razorpayInstance) {
+            try {
+                const plink = await razorpayInstance.paymentLink.fetch(invoice.razorpayLinkId);
+                if (plink.status === "paid") {
+                    invoice.status = "PAID";
+                    invoice.paidAt = new Date();
+                    await invoice.save();
+                }
+            } catch (error) {
+                console.error(`Failed to fetch status for ${invoice.invoiceNumber}:`, error);
+            }
+        }
     }
 
     // Transform userId to 'sme' for the frontend
@@ -185,6 +220,23 @@ const searchInvoice = asyncHandler(async (req, res) => {
 
     if (!invoice) {
         throw new ApiError(404, "Invoice not found or email mismatch");
+    }
+
+    // Check Razorpay status if pending
+    if (invoice.status === "PENDING" && invoice.razorpayLinkId) {
+        const razorpayInstance = getRazorpayInstance();
+        if (razorpayInstance) {
+            try {
+                const plink = await razorpayInstance.paymentLink.fetch(invoice.razorpayLinkId);
+                if (plink.status === "paid") {
+                    invoice.status = "PAID";
+                    invoice.paidAt = new Date();
+                    await invoice.save();
+                }
+            } catch (error) {
+                console.error(`Failed to fetch status for ${invoice.invoiceNumber}:`, error);
+            }
+        }
     }
 
     return res.status(200).json(

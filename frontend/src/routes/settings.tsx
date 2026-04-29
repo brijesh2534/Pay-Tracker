@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useNotifications } from "../context/NotificationContext";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -136,6 +137,8 @@ function Row({
 }
 
 function Notifications() {
+  const { settings, updateSettings } = useNotifications();
+
   return (
     <Panel
       title="Notifications"
@@ -145,27 +148,52 @@ function Notifications() {
         <Row
           title="Payment received"
           description="Toast + email when a client pays an invoice."
-          control={<Switch defaultChecked />}
+          control={
+            <Switch 
+              checked={settings.paymentReceived} 
+              onCheckedChange={(val) => updateSettings({ paymentReceived: val })} 
+            />
+          }
         />
         <Row
           title="Invoice viewed"
           description="Notify me when a client opens the payment page."
-          control={<Switch defaultChecked />}
+          control={
+            <Switch 
+              checked={settings.invoiceViewed} 
+              onCheckedChange={(val) => updateSettings({ invoiceViewed: val })} 
+            />
+          }
         />
         <Row
           title="Overdue alerts"
           description="Daily digest of invoices past due date."
-          control={<Switch defaultChecked />}
+          control={
+            <Switch 
+              checked={settings.overdueAlerts} 
+              onCheckedChange={(val) => updateSettings({ overdueAlerts: val })} 
+            />
+          }
         />
         <Row
           title="Weekly cashflow report"
           description="Summary every Monday at 9:00 AM IST."
-          control={<Switch />}
+          control={
+            <Switch 
+              checked={settings.cashflowReport} 
+              onCheckedChange={(val) => updateSettings({ cashflowReport: val })} 
+            />
+          }
         />
         <Row
           title="Product updates"
           description="New features, tips and occasional offers."
-          control={<Switch />}
+          control={
+            <Switch 
+              checked={settings.productUpdates} 
+              onCheckedChange={(val) => updateSettings({ productUpdates: val })} 
+            />
+          }
         />
       </div>
       <div className="flex justify-end mt-4">

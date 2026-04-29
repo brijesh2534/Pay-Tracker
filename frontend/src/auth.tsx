@@ -19,6 +19,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
+  updateUser: (data: Partial<User>) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -87,8 +88,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast.info("Logged out");
   };
 
+  const updateUser = async (data: Partial<User>) => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      const response = await axios.patch(`${API_URL}/users/update-account`, data, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      const updatedUser = response.data.data;
+      setUser(updatedUser);
+      localStorage.setItem("pay_tracker_user", JSON.stringify(updatedUser));
+      toast.success("Profile updated!");
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Update failed";
+      toast.error(message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -39,6 +39,9 @@ const invoiceSchema = new Schema(
         paymentLink: {
             type: String, // Razorpay link
         },
+        razorpayLinkId: {
+            type: String, // Razorpay Link ID (plink_...)
+        },
         paymentMethod: {
             type: String,
             enum: ["UPI", "RAZORPAY", "MANUAL"],

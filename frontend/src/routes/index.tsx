@@ -22,11 +22,12 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { CountUp } from "@/components/CountUp";
 import { StatusBadge } from "@/components/StatusBadge";
-import { cashflow, weekly, formatINR, type InvoiceStatus } from "@/lib/mock";
+import { formatINR, type InvoiceStatus } from "@/lib/mock";
 import { useAuth } from "../auth";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useNotifications } from "../context/NotificationContext";
 
 export const Route = createFileRoute("/")({
   beforeLoad: ({ context }) => {
@@ -106,6 +107,7 @@ function Dashboard() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { addNotif } = useNotifications();
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -116,7 +118,25 @@ function Dashboard() {
             Authorization: `Bearer ${token}`
           }
         });
-        setInvoices(response.data.data);
+        
+        const newInvoices = response.data.data;
+        
+        // Check for newly paid invoices to add notifications
+        if (invoices.length > 0) {
+          newInvoices.forEach((newInv: any) => {
+            const oldInv = invoices.find(i => i._id === newInv._id);
+            if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
+              addNotif({
+                title: "Payment received (Auto)",
+                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
+                type: "success",
+                category: "payment",
+              });
+            }
+          });
+        }
+
+        setInvoices(newInvoices);
       } catch (error) {
         toast.error("Failed to load dashboard data");
       } finally {
@@ -125,11 +145,66 @@ function Dashboard() {
     };
 
     fetchInvoices();
+
+    // Refetch when user returns to the tab
+    window.addEventListener("focus", fetchInvoices);
+    return () => window.removeEventListener("focus", fetchInvoices);
   }, []);
 
   const totalRevenue = invoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.amount, 0);
   const pending = invoices.filter((i) => i.status === "PENDING").reduce((s, i) => s + i.amount, 0);
   const overdue = invoices.filter((i) => i.status === "OVERDUE").reduce((s, i) => s + i.amount, 0);
+
+  const generateCashflowData = () => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const result = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const monthName = months[d.getMonth()];
+      
+      const monthInvoices = invoices.filter(inv => {
+        const invDate = new Date(inv.createdAt);
+        return invDate.getMonth() === d.getMonth() && invDate.getFullYear() === d.getFullYear();
+      });
+
+      const revenue = monthInvoices.filter(inv => inv.status === "PAID").reduce((acc, curr) => acc + curr.amount, 0);
+      const expected = monthInvoices.reduce((acc, curr) => acc + curr.amount, 0);
+
+      result.push({ month: monthName, revenue, expected });
+    }
+    return result;
+  };
+
+  const generateWeeklyData = () => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const result = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayName = days[d.getDay()];
+      
+      const paidInvoices = invoices.filter(inv => {
+        if (inv.status !== "PAID") return false;
+        const invDate = new Date(inv.paidAt || inv.updatedAt || inv.createdAt);
+        return invDate.getDate() === d.getDate() && invDate.getMonth() === d.getMonth() && invDate.getFullYear() === d.getFullYear();
+      });
+      const paid = paidInvoices.reduce((acc, curr) => acc + curr.amount, 0);
+
+      const pendingInvoices = invoices.filter(inv => {
+        if (inv.status !== "PENDING") return false;
+        const invDate = new Date(inv.createdAt);
+        return invDate.getDate() === d.getDate() && invDate.getMonth() === d.getMonth() && invDate.getFullYear() === d.getFullYear();
+      });
+      const pending = pendingInvoices.reduce((acc, curr) => acc + curr.amount, 0);
+
+      result.push({ day: dayName, paid, pending });
+    }
+    return result;
+  };
+
+  const dynamicCashflow = generateCashflowData();
+  const dynamicWeekly = generateWeeklyData();
 
   return (
     <AppShell>
@@ -178,7 +253,7 @@ function Dashboard() {
                 </div>
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={cashflow} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <AreaChart data={dynamicCashflow} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="oklch(0.546 0.215 262.881)" stopOpacity={0.35} />
@@ -231,7 +306,7 @@ function Dashboard() {
                 <p className="text-xs text-muted-foreground mb-4">Daily collections</p>
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weekly} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                    <BarChart data={dynamicWeekly} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid stroke="oklch(0.92 0.012 255)" vertical={false} />
                       <XAxis dataKey="day" stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} />
                       <YAxis stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} tickFormatter={inrShort} />

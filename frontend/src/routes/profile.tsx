@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "../auth";
+import { useState } from "react";
 
 export const Route = createFileRoute("/profile")({
   beforeLoad: ({ context }) => {
@@ -26,6 +28,28 @@ export const Route = createFileRoute("/profile")({
 });
 
 function ProfilePage() {
+  const { user, updateUser, isLoading } = useAuth();
+  
+  const [formData, setFormData] = useState({
+    name: user?.name || "",
+    email: user?.email || "",
+    businessName: user?.businessName || "",
+    upiId: user?.upiId || "",
+  });
+
+  const handleSave = async () => {
+    try {
+      await updateUser(formData);
+    } catch (error) {
+      // Error handled in auth context
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto space-y-6 animate-fade-up">
@@ -37,11 +61,16 @@ function ProfilePage() {
             </p>
           </div>
           <Button
-            onClick={() => toast.success("Profile saved", { description: "Changes are visible on new invoices." })}
-            className="gradient-primary text-primary-foreground shadow-glow hover:scale-[1.02] transition-transform"
+            onClick={handleSave}
+            disabled={isLoading}
+            className="gradient-primary text-primary-foreground shadow-glow hover:scale-[1.02] transition-transform disabled:opacity-50"
           >
-            <Save className="h-4 w-4 mr-2" />
-            Save changes
+            {isLoading ? "Saving..." : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save changes
+              </>
+            )}
           </Button>
         </div>
 
@@ -65,12 +94,12 @@ function ProfilePage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold">Raghav Acharya</h2>
+                <h2 className="text-xl font-semibold">{user?.name}</h2>
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-success bg-success-soft px-2 py-0.5 rounded-full">
                   <BadgeCheck className="h-3.5 w-3.5" /> Verified
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground">Founder · Brightlabs Pvt. Ltd.</p>
+              <p className="text-sm text-muted-foreground">{formData.businessName || "Business owner"}</p>
             </div>
             <div className="grid grid-cols-3 gap-4 text-center">
               {[
@@ -94,10 +123,8 @@ function ProfilePage() {
           </h3>
           <Separator className="my-4" />
           <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Full name" defaultValue="Raghav Acharya" />
-            <Field label="Email" type="email" defaultValue="raghav@brightlabs.in" />
-            <Field label="Phone" type="tel" defaultValue="+91 98765 43210" />
-            <Field label="Designation" defaultValue="Founder" />
+            <Field label="Full name" name="name" value={formData.name} onChange={handleChange} />
+            <Field label="Email" name="email" type="email" value={formData.email} onChange={handleChange} />
           </div>
         </section>
 
@@ -108,19 +135,7 @@ function ProfilePage() {
           </h3>
           <Separator className="my-4" />
           <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Business name" defaultValue="Brightlabs Pvt. Ltd." />
-            <Field label="GSTIN" defaultValue="29ABCDE1234F1Z5" />
-            <Field label="PAN" defaultValue="ABCDE1234F" />
-            <Field label="Website" defaultValue="brightlabs.in" />
-            <div className="sm:col-span-2 space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Registered address
-              </Label>
-              <Textarea
-                defaultValue="404, Indiranagar, Bengaluru, Karnataka 560038"
-                className="min-h-[80px] resize-none"
-              />
-            </div>
+            <Field label="Business name" name="businessName" value={formData.businessName} onChange={handleChange} />
           </div>
         </section>
 
@@ -131,10 +146,7 @@ function ProfilePage() {
           </h3>
           <Separator className="my-4" />
           <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="UPI ID" defaultValue="brightlabs@hdfc" />
-            <Field label="Account holder" defaultValue="Brightlabs Pvt. Ltd." />
-            <Field label="Account number" defaultValue="50100123456789" />
-            <Field label="IFSC" defaultValue="HDFC0001234" />
+            <Field label="UPI ID" name="upiId" value={formData.upiId} onChange={handleChange} />
           </div>
           <div className="mt-4 flex items-start gap-3 rounded-xl bg-primary-soft text-primary p-3 text-xs">
             <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
@@ -148,17 +160,21 @@ function ProfilePage() {
 
 function Field({
   label,
+  name,
   type = "text",
-  defaultValue,
+  value,
+  onChange,
 }: {
   label: string;
+  name: string;
   type?: string;
-  defaultValue?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div className="space-y-2">
       <Label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
-      <Input type={type} defaultValue={defaultValue} className="h-10" />
+      <Input name={name} type={type} value={value} onChange={onChange} className="h-10" />
     </div>
   );
 }

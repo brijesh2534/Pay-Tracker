@@ -30,7 +30,7 @@ const registerUser = asyncHandler( async (req, res) => {
     }
 
     try {
-        const existedUser = await User.findOne({ email })
+        const existedUser = await User.findOne({ email: email.toLowerCase().trim() })
 
         if (existedUser) {
             throw new ApiError(409, "User with email already exists")
@@ -65,7 +65,7 @@ const loginUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "email is required")
     }
 
-    const user = await User.findOne({ email })
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
 
     if (!user) {
         throw new ApiError(404, "User does not exist")
@@ -127,8 +127,34 @@ const logoutUser = asyncHandler(async(req, res) => {
     .json(new ApiResponse(200, {}, "User logged Out"))
 })
 
+const updateUserDetails = asyncHandler(async (req, res) => {
+    const { name, email, businessName, upiId } = req.body
+
+    if (!name || !email) {
+        throw new ApiError(400, "Name and email are required")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                name,
+                email,
+                businessName,
+                upiId
+            }
+        },
+        { new: true }
+    ).select("-password -refreshToken")
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Account details updated successfully"))
+})
+
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    updateUserDetails
 }

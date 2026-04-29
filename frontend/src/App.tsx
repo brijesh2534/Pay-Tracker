@@ -1,6 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router";
 import { router } from "./router";
 import { AuthProvider, useAuth } from "./auth";
+import { NotificationProvider } from "./context/NotificationContext";
 
 function InnerApp() {
   const auth = useAuth();
@@ -10,7 +11,9 @@ function InnerApp() {
 function App() {
   return (
     <AuthProvider>
-      <InnerApp />
+      <NotificationProvider>
+        <InnerApp />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

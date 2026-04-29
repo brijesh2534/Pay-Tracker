@@ -4,6 +4,7 @@ import { formatINR } from "@/lib/mock";
 import { ShieldCheck, Copy, Check, ArrowRight, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
+import { useNotifications } from "../context/NotificationContext";
 
 export const Route = createFileRoute("/pay/$id")({
   loader: async ({ params }) => {
@@ -23,12 +24,12 @@ export const Route = createFileRoute("/pay/$id")({
   component: PublicPay,
 });
 
-
 function PublicPay() {
   const inv = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
   const [paying, setPaying] = useState(false);
   const [status, setStatus] = useState(inv.status);
+  const { addNotif } = useNotifications();
 
   const tax = Math.round(inv.amount * 0.18);
   const total = inv.amount + tax;
@@ -51,6 +52,12 @@ function PublicPay() {
       });
       setStatus("PAID");
       toast.success("Payment successful!", { description: `${formatINR(total)} received` });
+      addNotif({
+        title: "Payment confirmed",
+        description: `${inv.clientName} paid ${inv.invoiceNumber} · ${formatINR(total)}`,
+        type: "success",
+        category: "payment",
+      });
     } catch (error) {
       toast.error("Failed to update payment status");
     } finally {

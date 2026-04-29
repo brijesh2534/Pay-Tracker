@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ArrowUpDown, Download, Plus, Search, Loader2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useNotifications } from "../context/NotificationContext";
 
 export const Route = createFileRoute("/invoices/")({
   head: () => ({
@@ -24,6 +25,7 @@ function InvoiceList() {
   const [q, setQ] = useState("");
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { addNotif } = useNotifications();
 
   useEffect(() => {
     const fetchInvoices = async () => {
@@ -34,7 +36,25 @@ function InvoiceList() {
             Authorization: `Bearer ${token}`
           }
         });
-        setInvoices(response.data.data);
+        
+        const newInvoices = response.data.data;
+        
+        // Check for newly paid invoices to add notifications
+        if (invoices.length > 0) {
+          newInvoices.forEach((newInv: any) => {
+            const oldInv = invoices.find(i => i._id === newInv._id);
+            if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
+              addNotif({
+                title: "Payment received (Auto)",
+                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
+                type: "success",
+                category: "payment",
+              });
+            }
+          });
+        }
+
+        setInvoices(newInvoices);
       } catch (error: any) {
         toast.error("Failed to load invoices");
       } finally {
@@ -43,6 +63,10 @@ function InvoiceList() {
     };
 
     fetchInvoices();
+
+    // Refetch when user returns to the tab
+    window.addEventListener("focus", fetchInvoices);
+    return () => window.removeEventListener("focus", fetchInvoices);
   }, []);
 
   const rows = useMemo(() => {
