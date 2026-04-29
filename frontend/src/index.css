@@ -105,3 +105,27 @@
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
 }
+@media print {
+  .no-print, 
+  button, 
+  form, 
+  nav, 
+  a[href="/invoices/new"],
+  .inline-flex.items-center.gap-2.rounded-xl {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    padding: 0 !important;
+  }
+
+  .bg-card {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .max-w-2xl {
+    max-width: 100% !important;
+  }
+}

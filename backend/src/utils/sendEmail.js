@@ -11,7 +11,7 @@ const sendEmail = async (email, subject, message) => {
     const CLIENT_ID = process.env.GMAIL_CLIENT_ID;
     const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
     const REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
-    const SENDER_EMAIL = process.env.EMAIL_USER;
+    const SENDER_EMAIL = process.env.GMAIL_USER;
 
     const oAuth2Client = new google.auth.OAuth2(
       CLIENT_ID,
@@ -26,7 +26,7 @@ const sendEmail = async (email, subject, message) => {
     // Create the email content
     const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
     const messageParts = [
-      `From: MomentX <${SENDER_EMAIL}>`,
+      `From: Pay Tracker <${SENDER_EMAIL}>`,
       `To: ${email}`,
       'Content-Type: text/html; charset=utf-8',
       'MIME-Version: 1.0',
@@ -34,7 +34,7 @@ const sendEmail = async (email, subject, message) => {
       '',
       `
         <div style="font-family: sans-serif; padding: 20px; color: #333; background-color: #f9f9f9; border-radius: 10px;">
-          <h2 style="color: #6366f1;">MomentX</h2>
+          <h2 style="color: #6366f1;">Pay Tracker</h2>
           <p style="font-size: 16px;">${message}</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
           <p style="font-size: 12px; color: #666;">This is an automated message. Please do not reply.</p>

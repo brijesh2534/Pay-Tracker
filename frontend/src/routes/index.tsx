@@ -18,6 +18,8 @@ import {
   Plus,
   Sparkles,
   Loader2,
+  CheckCircle2,
+  Upload,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { CountUp } from "@/components/CountUp";
@@ -106,75 +108,60 @@ function StatCard({
 function Dashboard() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [logs, setLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotif } = useNotifications();
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const token = localStorage.getItem("pay_tracker_token");
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices`, {
-          headers: {
-            Authorization: `Bearer ${token}`
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      const [invRes, statsRes, logsRes] = await Promise.all([
+        axios.get(`${import.meta.env.VITE_API_URL}/invoices`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/invoices/stats`, { headers }),
+        axios.get(`${import.meta.env.VITE_API_URL}/users/activity`, { headers })
+      ]);
+      
+      const newInvoices = invRes.data.data;
+      
+      // Check for newly paid invoices to add notifications
+      if (invoices.length > 0) {
+        newInvoices.forEach((newInv: any) => {
+          const oldInv = invoices.find(i => i._id === newInv._id);
+          if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
+            addNotif({
+              title: "Payment received (Auto)",
+              description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
+              type: "success",
+              category: "payment",
+            });
           }
         });
-        
-        const newInvoices = response.data.data;
-        
-        // Check for newly paid invoices to add notifications
-        if (invoices.length > 0) {
-          newInvoices.forEach((newInv: any) => {
-            const oldInv = invoices.find(i => i._id === newInv._id);
-            if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
-              addNotif({
-                title: "Payment received (Auto)",
-                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
-                type: "success",
-                category: "payment",
-              });
-            }
-          });
-        }
-
-        setInvoices(newInvoices);
-      } catch (error) {
-        toast.error("Failed to load dashboard data");
-      } finally {
-        setIsLoading(false);
       }
-    };
 
-    fetchInvoices();
+      setInvoices(newInvoices);
+      setStats(statsRes.data.data);
+      setLogs(logsRes.data.data);
+    } catch (error) {
+      toast.error("Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
 
     // Refetch when user returns to the tab
-    window.addEventListener("focus", fetchInvoices);
-    return () => window.removeEventListener("focus", fetchInvoices);
+    window.addEventListener("focus", fetchData);
+    return () => window.removeEventListener("focus", fetchData);
   }, []);
 
-  const totalRevenue = invoices.filter((i) => i.status === "PAID").reduce((s, i) => s + i.amount, 0);
-  const pending = invoices.filter((i) => i.status === "PENDING").reduce((s, i) => s + i.amount, 0);
-  const overdue = invoices.filter((i) => i.status === "OVERDUE").reduce((s, i) => s + i.amount, 0);
-
-  const generateCashflowData = () => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const result = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const monthName = months[d.getMonth()];
-      
-      const monthInvoices = invoices.filter(inv => {
-        const invDate = new Date(inv.createdAt);
-        return invDate.getMonth() === d.getMonth() && invDate.getFullYear() === d.getFullYear();
-      });
-
-      const revenue = monthInvoices.filter(inv => inv.status === "PAID").reduce((acc, curr) => acc + curr.amount, 0);
-      const expected = monthInvoices.reduce((acc, curr) => acc + curr.amount, 0);
-
-      result.push({ month: monthName, revenue, expected });
-    }
-    return result;
-  };
+  const totalRevenue = stats?.totalRevenue || 0;
+  const pending = stats?.pending || 0;
+  const overdue = stats?.overdue || 0;
 
   const generateWeeklyData = () => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -203,7 +190,11 @@ function Dashboard() {
     return result;
   };
 
-  const dynamicCashflow = generateCashflowData();
+  const dynamicCashflow = stats?.cashflow?.map((item: any) => ({
+    date: new Date(item.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+    amount: item.amount
+  })) || [];
+
   const dynamicWeekly = generateWeeklyData();
 
   return (
@@ -243,12 +234,11 @@ function Dashboard() {
               <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-5 shadow-card animate-fade-up" style={{ animationDelay: "200ms" }}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-base font-semibold">Cashflow trend</h2>
-                    <p className="text-xs text-muted-foreground">Revenue vs expected — last 6 months</p>
+                    <h2 className="text-base font-semibold">Cashflow</h2>
+                    <p className="text-xs text-muted-foreground">Daily revenue — last 30 days</p>
                   </div>
                   <div className="flex gap-2 text-xs">
                     <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Revenue</span>
-                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />Expected</span>
                   </div>
                 </div>
                 <div className="h-72">
@@ -259,13 +249,9 @@ function Dashboard() {
                           <stop offset="0%" stopColor="oklch(0.546 0.215 262.881)" stopOpacity={0.35} />
                           <stop offset="100%" stopColor="oklch(0.546 0.215 262.881)" stopOpacity={0} />
                         </linearGradient>
-                        <linearGradient id="exp" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="oklch(0.72 0.18 150)" stopOpacity={0.3} />
-                          <stop offset="100%" stopColor="oklch(0.72 0.18 150)" stopOpacity={0} />
-                        </linearGradient>
                       </defs>
                       <CartesianGrid stroke="oklch(0.92 0.012 255)" vertical={false} />
-                      <XAxis dataKey="month" stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="date" stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} />
                       <YAxis stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} tickFormatter={inrShort} />
                       <Tooltip
                         contentStyle={{
@@ -276,8 +262,7 @@ function Dashboard() {
                         }}
                         formatter={(v) => formatINR(Number(v))}
                       />
-                      <Area type="monotone" dataKey="revenue" stroke="oklch(0.546 0.215 262.881)" strokeWidth={2.5} fill="url(#rev)" animationDuration={1200} />
-                      <Area type="monotone" dataKey="expected" stroke="oklch(0.72 0.18 150)" strokeWidth={2} fill="url(#exp)" animationDuration={1400} />
+                      <Area type="monotone" dataKey="amount" stroke="oklch(0.546 0.215 262.881)" strokeWidth={2.5} fill="url(#rev)" animationDuration={1200} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -325,8 +310,10 @@ function Dashboard() {
                   </ResponsiveContainer>
                 </div>
               </div>
+            </div>
 
-              <div className="lg:col-span-2 rounded-2xl bg-card border border-border shadow-card overflow-hidden animate-fade-up" style={{ animationDelay: "380ms" }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-2xl bg-card border border-border shadow-card overflow-hidden animate-fade-up" style={{ animationDelay: "380ms" }}>
                 <div className="flex items-center justify-between p-5 border-b border-border">
                   <div>
                     <h2 className="text-base font-semibold">Recent invoices</h2>
@@ -356,6 +343,42 @@ function Dashboard() {
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="text-sm font-semibold tabular-nums">{formatINR(inv.amount)}</span>
                           <StatusBadge status={inv.status.toLowerCase() as InvoiceStatus} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-card border border-border shadow-card overflow-hidden animate-fade-up" style={{ animationDelay: "440ms" }}>
+                <div className="p-5 border-b border-border">
+                  <h2 className="text-base font-semibold">Activity logs</h2>
+                  <p className="text-xs text-muted-foreground">Recent system and payment events</p>
+                </div>
+                <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
+                  {logs.length === 0 ? (
+                    <div className="p-8 text-center text-sm text-muted-foreground">
+                      No activity logs yet.
+                    </div>
+                  ) : (
+                    logs.map((log) => (
+                      <div key={log._id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-accent/40 transition-colors">
+                        <div className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                          log.action === 'PAYMENT_RECEIVED' ? 'bg-success-soft text-success' : 
+                          log.action === 'INVOICE_CREATED' ? 'bg-primary-soft text-primary' : 
+                          log.action === 'PAYMENT_PROOF_UPLOADED' ? 'bg-warning-soft text-warning' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {log.action === 'PAYMENT_RECEIVED' ? <CheckCircle2 className="h-4 w-4" /> : 
+                           log.action === 'INVOICE_CREATED' ? <Plus className="h-4 w-4" /> : 
+                           log.action === 'PAYMENT_PROOF_UPLOADED' ? <Upload className="h-4 w-4" /> :
+                           <Clock className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-foreground">{log.details}</div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 uppercase font-bold tracking-tight">
+                            {new Date(log.createdAt).toLocaleString("en-IN", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </div>
                         </div>
                       </div>
                     ))

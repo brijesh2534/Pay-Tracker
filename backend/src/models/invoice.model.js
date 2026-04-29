@@ -48,6 +48,17 @@ const invoiceSchema = new Schema(
         },
         paidAt: {
             type: Date,
+        },
+        paymentProof: {
+            type: String, // Cloudinary URL
+        },
+        reminderSent1DayBefore: {
+            type: Boolean,
+            default: false,
+        },
+        reminderSentOnDueDate: {
+            type: Boolean,
+            default: false,
         }
     },
     {

@@ -1,23 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, CreditCard, FileText, TrendingUp, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import axios from "axios";
-import { toast } from "sonner";
-import { formatINR } from "@/lib/mock";
-
-export const Route = createFileRoute("/admin/dashboard")({
-  beforeLoad: ({ context }) => {
-    if (!context.auth.isAuthenticated || (context.auth.user as any)?.role !== "ADMIN") {
-      throw redirect({
-        to: "/admin/login",
-      });
-    }
-  },
-  component: AdminDashboardComponent,
-});
-
-import { Users, CreditCard, FileText, TrendingUp, Loader2 } from "lucide-react";
+import { Users, CreditCard, FileText, TrendingUp, Loader2, CheckCircle2, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -238,5 +221,4 @@ function AdminDashboardComponent() {
   );
 }
 
-import { CheckCircle2, Clock } from "lucide-react";
 

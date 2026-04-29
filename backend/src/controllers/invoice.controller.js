@@ -3,7 +3,9 @@ import { ApiError } from "../utils/ApiError.js";
 import { Invoice } from "../models/invoice.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import crypto from "crypto";
-import { sendInvoiceEmail } from "../utils/mail.js";
+import { sendEmail } from "../utils/sendEmail.js";
+import { logActivity } from "../utils/logger.js";
+import { uploadInCloudinary } from "../utils/cloudinary.js";
 
 import Razorpay from "razorpay";
 
@@ -130,11 +132,18 @@ const createInvoice = asyncHandler(async (req, res) => {
     `;
 
     // Send email asynchronously
-    sendInvoiceEmail({
-        to: clientEmail,
-        subject: `Invoice ${invoiceNumber} from ${req.user?.businessName || req.user?.name}`,
-        html: emailHtml
-    }).catch(err => console.error("Email sending failed:", err));
+    sendEmail(
+        clientEmail,
+        `Invoice ${invoiceNumber} from ${req.user?.businessName || req.user?.name}`,
+        emailHtml
+    ).catch(err => console.error("Email sending failed:", err));
+
+    await logActivity({
+        userId: req.user._id,
+        invoiceId: invoice._id,
+        action: "INVOICE_CREATED",
+        details: `Invoice ${invoiceNumber} created for ${clientName} (${clientEmail})`
+    });
 
     return res.status(201).json(
         new ApiResponse(201, invoice, "Invoice created successfully with payment link and email sent")
@@ -265,8 +274,97 @@ const updateInvoiceStatus = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Invoice not found");
     }
 
+    await logActivity({
+        userId: invoice.userId,
+        invoiceId: invoice._id,
+        action: status === "PAID" ? "PAYMENT_RECEIVED" : "STATUS_UPDATED",
+        details: `Invoice status updated to ${status}`
+    });
+
     return res.status(200).json(
         new ApiResponse(200, invoice, `Invoice marked as ${status.toLowerCase()}`)
+    );
+});
+
+const getDashboardStats = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+
+    // Get all invoices for this user
+    const invoices = await Invoice.find({ userId });
+
+    const stats = {
+        totalRevenue: 0,
+        pending: 0,
+        overdue: 0,
+        cashflow: [] // Array of daily revenue for last 30 days
+    };
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    // Initialize cashflow map
+    const cashflowMap = new Map();
+    for (let i = 0; i < 30; i++) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        cashflowMap.set(date.toISOString().split('T')[0], 0);
+    }
+
+    invoices.forEach(inv => {
+        if (inv.status === "PAID") {
+            stats.totalRevenue += inv.amount;
+            if (inv.paidAt && inv.paidAt >= thirtyDaysAgo) {
+                const dateKey = inv.paidAt.toISOString().split('T')[0];
+                if (cashflowMap.has(dateKey)) {
+                    cashflowMap.set(dateKey, cashflowMap.get(dateKey) + inv.amount);
+                }
+            }
+        } else if (inv.status === "PENDING") {
+            stats.pending += inv.amount;
+        } else if (inv.status === "OVERDUE") {
+            stats.overdue += inv.amount;
+        }
+    });
+
+    // Convert map to sorted array
+    stats.cashflow = Array.from(cashflowMap.entries())
+        .map(([date, amount]) => ({ date, amount }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    return res.status(200).json(
+        new ApiResponse(200, stats, "Dashboard stats fetched successfully")
+    );
+});
+
+const uploadPaymentProof = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    
+    if (!req.file) {
+        throw new ApiError(400, "Payment proof file is required");
+    }
+
+    const invoice = await Invoice.findById(id);
+    if (!invoice) {
+        throw new ApiError(404, "Invoice not found");
+    }
+
+    const uploadResult = await uploadInCloudinary(req.file.path);
+    if (!uploadResult) {
+        throw new ApiError(500, "Failed to upload file to Cloudinary");
+    }
+
+    invoice.paymentProof = uploadResult.secure_url;
+    await invoice.save();
+
+    await logActivity({
+        userId: invoice.userId,
+        invoiceId: invoice._id,
+        action: "PAYMENT_PROOF_UPLOADED",
+        details: "Client uploaded payment proof screenshot"
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, { url: uploadResult.secure_url }, "Payment proof uploaded successfully")
     );
 });
 
@@ -275,5 +373,7 @@ export {
     getInvoices,
     getInvoiceById,
     searchInvoice,
-    updateInvoiceStatus
+    updateInvoiceStatus,
+    getDashboardStats,
+    uploadPaymentProof
 };
