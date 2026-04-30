@@ -6,6 +6,8 @@ import crypto from "crypto";
 import { sendEmail } from "../utils/sendEmail.js";
 import { logActivity } from "../utils/logger.js";
 import { uploadInCloudinary } from "../utils/cloudinary.js";
+import { User } from "../models/user.model.js";
+import { Notification } from "../models/notification.model.js";
 
 import Razorpay from "razorpay";
 
@@ -138,15 +140,23 @@ const createInvoice = asyncHandler(async (req, res) => {
         emailHtml
     ).catch(err => console.error("Email sending failed:", err));
 
-    await logActivity({
-        userId: req.user._id,
-        invoiceId: invoice._id,
-        action: "INVOICE_CREATED",
-        details: `Invoice ${invoiceNumber} created for ${clientName} (${clientEmail})`
-    });
+    // Log activity for the creator (SME)
+    await logActivity(req.user?._id, "INVOICE_CREATED", `Created invoice ${invoiceNumber} for ${clientName}`);
+
+    // CHECK if client exists on Pay Tracker and send notification
+    const clientUser = await User.findOne({ email: clientEmail });
+    if (clientUser) {
+        await Notification.create({
+            userId: clientUser._id,
+            title: "New Invoice Received",
+            description: `${req.user?.businessName || req.user?.name} sent you a new invoice ${invoiceNumber} for ₹${amount}`,
+            type: "info",
+            category: "invoice"
+        });
+    }
 
     return res.status(201).json(
-        new ApiResponse(201, invoice, "Invoice created successfully with payment link and email sent")
+        new ApiResponse(201, invoice, "Invoice created successfully and email sent")
     );
 });
 
@@ -368,6 +378,16 @@ const uploadPaymentProof = asyncHandler(async (req, res) => {
     );
 });
 
+const getReceivedInvoices = asyncHandler(async (req, res) => {
+    const invoices = await Invoice.find({ clientEmail: req.user.email })
+        .populate("userId", "businessName name")
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json(
+        new ApiResponse(200, invoices, "Received invoices fetched successfully")
+    );
+});
+
 export {
     createInvoice,
     getInvoices,
@@ -375,5 +395,6 @@ export {
     searchInvoice,
     updateInvoiceStatus,
     getDashboardStats,
-    uploadPaymentProof
+    uploadPaymentProof,
+    getReceivedInvoices
 };

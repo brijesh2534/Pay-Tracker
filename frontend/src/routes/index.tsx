@@ -33,7 +33,10 @@ import { useNotifications } from "../context/NotificationContext";
 
 export const Route = createFileRoute("/")({
   beforeLoad: ({ context }) => {
-    if (!context.auth.isAuthenticated) {
+    const storedUser = localStorage.getItem("pay_tracker_user");
+    const isAuthenticated = context.auth.isAuthenticated || !!storedUser;
+
+    if (!isAuthenticated) {
       throw redirect({
         to: "/login",
       });

@@ -1,4 +1,5 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
 import { Invoice } from "../models/invoice.model.js";
@@ -54,6 +55,59 @@ const getAdminStats = asyncHandler(async (req, res) => {
     );
 });
 
+const getAllUsers = asyncHandler(async (req, res) => {
+    const users = await User.find({ role: "SME" })
+        .sort({ createdAt: -1 })
+        .select("-password -refreshToken");
+
+    // Enhance users with their invoice stats
+    const usersWithStats = await Promise.all(users.map(async (user) => {
+        const invoiceStats = await Invoice.aggregate([
+            { $match: { userId: user._id } },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    revenue: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "PAID"] }, "$amount", 0]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        return {
+            ...user.toObject(),
+            invoiceCount: invoiceStats[0]?.count || 0,
+            revenue: invoiceStats[0]?.revenue || 0
+        };
+    }));
+
+    return res.status(200).json(
+        new ApiResponse(200, usersWithStats, "Users fetched successfully")
+    );
+});
+
+const deleteUser = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    // Delete user's invoices as well
+    await Invoice.deleteMany({ userId: id });
+    await User.findByIdAndDelete(id);
+
+    return res.status(200).json(
+        new ApiResponse(200, null, "User and their data deleted successfully")
+    );
+});
+
 export {
-    getAdminStats
+    getAdminStats,
+    getAllUsers,
+    deleteUser
 };

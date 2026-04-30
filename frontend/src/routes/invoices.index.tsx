@@ -18,7 +18,7 @@ export const Route = createFileRoute("/invoices/")({
   component: InvoiceList,
 });
 
-const filters: ("all" | InvoiceStatus)[] = ["all", "paid", "pending", "overdue"];
+const filters: ("all" | "remaining" | InvoiceStatus)[] = ["all", "remaining", "paid", "pending", "overdue"];
 
 function InvoiceList() {
   const [filter, setFilter] = useState<(typeof filters)[number]>("all");
@@ -71,8 +71,13 @@ function InvoiceList() {
 
   const rows = useMemo(() => {
     return invoices.filter((i) => {
-      const status = i.status.toLowerCase() as InvoiceStatus;
-      const matchFilter = filter === "all" || status === filter;
+      const status = i.status.toLowerCase();
+      let matchFilter = filter === "all" || status === filter;
+      
+      if (filter === "remaining") {
+        matchFilter = status === "pending" || status === "overdue";
+      }
+
       const matchQ = q === "" || 
         `${i.clientName} ${i.invoiceNumber} ${i.clientEmail}`.toLowerCase().includes(q.toLowerCase());
       return matchFilter && matchQ;
@@ -81,6 +86,7 @@ function InvoiceList() {
 
   const counts = {
     all: invoices.length,
+    remaining: invoices.filter((i) => i.status === "PENDING" || i.status === "OVERDUE").length,
     paid: invoices.filter((i) => i.status === "PAID").length,
     pending: invoices.filter((i) => i.status === "PENDING").length,
     overdue: invoices.filter((i) => i.status === "OVERDUE").length,

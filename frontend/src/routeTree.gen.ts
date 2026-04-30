@@ -17,9 +17,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as PayIdRouteImport } from './routes/pay.$id'
+import { Route as InvoicesReceivedRouteImport } from './routes/invoices.received'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
+import { Route as InvoicesPayIdRouteImport } from './routes/invoices.pay.$id'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -61,6 +63,11 @@ const PayIdRoute = PayIdRouteImport.update({
   path: '/pay/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoicesReceivedRoute = InvoicesReceivedRouteImport.update({
+  id: '/invoices/received',
+  path: '/invoices/received',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InvoicesNewRoute = InvoicesNewRouteImport.update({
   id: '/invoices/new',
   path: '/invoices/new',
@@ -76,6 +83,11 @@ const AdminDashboardRoute = AdminDashboardRouteImport.update({
   path: '/admin/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoicesPayIdRoute = InvoicesPayIdRouteImport.update({
+  id: '/invoices/pay/$id',
+  path: '/invoices/pay/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,8 +99,10 @@ export interface FileRoutesByFullPath {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/invoices/received': typeof InvoicesReceivedRoute
   '/pay/$id': typeof PayIdRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/invoices/pay/$id': typeof InvoicesPayIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -100,8 +114,10 @@ export interface FileRoutesByTo {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/invoices/received': typeof InvoicesReceivedRoute
   '/pay/$id': typeof PayIdRoute
   '/invoices': typeof InvoicesIndexRoute
+  '/invoices/pay/$id': typeof InvoicesPayIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -114,8 +130,10 @@ export interface FileRoutesById {
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/login': typeof AdminLoginRoute
   '/invoices/new': typeof InvoicesNewRoute
+  '/invoices/received': typeof InvoicesReceivedRoute
   '/pay/$id': typeof PayIdRoute
   '/invoices/': typeof InvoicesIndexRoute
+  '/invoices/pay/$id': typeof InvoicesPayIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -129,8 +147,10 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/invoices/new'
+    | '/invoices/received'
     | '/pay/$id'
     | '/invoices/'
+    | '/invoices/pay/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -142,8 +162,10 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/invoices/new'
+    | '/invoices/received'
     | '/pay/$id'
     | '/invoices'
+    | '/invoices/pay/$id'
   id:
     | '__root__'
     | '/'
@@ -155,8 +177,10 @@ export interface FileRouteTypes {
     | '/admin/dashboard'
     | '/admin/login'
     | '/invoices/new'
+    | '/invoices/received'
     | '/pay/$id'
     | '/invoices/'
+    | '/invoices/pay/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -169,8 +193,10 @@ export interface RootRouteChildren {
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminLoginRoute: typeof AdminLoginRoute
   InvoicesNewRoute: typeof InvoicesNewRoute
+  InvoicesReceivedRoute: typeof InvoicesReceivedRoute
   PayIdRoute: typeof PayIdRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
+  InvoicesPayIdRoute: typeof InvoicesPayIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -231,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PayIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoices/received': {
+      id: '/invoices/received'
+      path: '/invoices/received'
+      fullPath: '/invoices/received'
+      preLoaderRoute: typeof InvoicesReceivedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invoices/new': {
       id: '/invoices/new'
       path: '/invoices/new'
@@ -252,6 +285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoices/pay/$id': {
+      id: '/invoices/pay/$id'
+      path: '/invoices/pay/$id'
+      fullPath: '/invoices/pay/$id'
+      preLoaderRoute: typeof InvoicesPayIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -265,8 +305,10 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDashboardRoute: AdminDashboardRoute,
   AdminLoginRoute: AdminLoginRoute,
   InvoicesNewRoute: InvoicesNewRoute,
+  InvoicesReceivedRoute: InvoicesReceivedRoute,
   PayIdRoute: PayIdRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,
+  InvoicesPayIdRoute: InvoicesPayIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

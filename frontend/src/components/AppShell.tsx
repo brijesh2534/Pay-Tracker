@@ -9,13 +9,12 @@ import {
   Sparkles,
   CheckCircle2,
   AlertTriangle,
-  Clock,
+  CreditCard,
   User,
   LogOut,
   Eye,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { toast } from "sonner";
 import {
   Popover,
@@ -34,53 +33,11 @@ import {
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/invoices", label: "Invoices", icon: FileText },
+  { to: "/invoices/received", label: "Received Invoices", icon: CreditCard },
   { to: "/invoices/new", label: "Create", icon: PlusCircle },
   { to: "/search", label: "Search", icon: Search },
 ];
 
-type Notif = {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: "success" | "warning" | "info";
-  unread: boolean;
-};
-
-const initialNotifs: Notif[] = [
-  {
-    id: "n1",
-    title: "Payment received",
-    description: "Aakash Mehta paid INV-2041 · ₹48,500",
-    time: "2m ago",
-    type: "success",
-    unread: true,
-  },
-  {
-    id: "n2",
-    title: "Invoice overdue",
-    description: "INV-2043 to Rohan Kapoor is 18 days overdue",
-    time: "1h ago",
-    type: "warning",
-    unread: true,
-  },
-  {
-    id: "n3",
-    title: "Reminder sent",
-    description: "Auto-reminder emailed to Priya Sharma",
-    time: "4h ago",
-    type: "info",
-    unread: true,
-  },
-  {
-    id: "n4",
-    title: "Invoice viewed",
-    description: "Vikram Singh opened INV-2045",
-    time: "Yesterday",
-    type: "info",
-    unread: false,
-  },
-];
 
 import { useAuth } from "../auth";
 import { useNavigate } from "@tanstack/react-router";

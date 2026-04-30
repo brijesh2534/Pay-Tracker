@@ -27,10 +27,12 @@ app.use((req, res, next) => {
 import userRouter from './routes/user.routes.js'
 import invoiceRouter from './routes/invoice.routes.js'
 import adminRouter from './routes/admin.routes.js'
+import notificationRouter from './routes/notification.routes.js'
 
 // Routes declaration
 app.use("/api/v1/users", userRouter)
 app.use("/api/v1/invoices", invoiceRouter)
 app.use("/api/v1/admin", adminRouter)
+app.use("/api/v1/notifications", notificationRouter)
 
 export { app };

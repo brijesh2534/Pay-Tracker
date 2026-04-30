@@ -1,15 +1,19 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import axios from "axios";
+import { useAuth } from "../auth";
 
-export type NotifType = "success" | "warning" | "info";
+export type NotifType = "success" | "warning" | "info" | "error";
 
 export interface Notif {
   id: string;
+  _id?: string;
   title: string;
   description: string;
   time: string;
+  createdAt?: string;
   type: NotifType;
   unread: boolean;
-  category: "payment" | "viewed" | "overdue" | "report" | "product";
+  category: "payment" | "viewed" | "overdue" | "report" | "product" | "invoice";
 }
 
 interface NotificationSettings {
@@ -28,9 +32,8 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   updateSettings: (newSettings: Partial<NotificationSettings>) => void;
   addNotif: (notif: Omit<Notif, "id" | "unread" | "time">) => void;
+  refreshNotifs: () => void;
 }
-
-const initialNotifs: Notif[] = [];
 
 const defaultSettings: NotificationSettings = {
   paymentReceived: true,
@@ -43,19 +46,40 @@ const defaultSettings: NotificationSettings = {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifs, setNotifs] = useState<Notif[]>(() => {
-    const saved = localStorage.getItem("pay_tracker_notifs");
-    return saved ? JSON.parse(saved) : initialNotifs;
-  });
-
+  const { isAuthenticated } = useAuth();
+  const [notifs, setNotifs] = useState<Notif[]>([]);
   const [settings, setSettings] = useState<NotificationSettings>(() => {
     const saved = localStorage.getItem("pay_tracker_notif_settings");
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
+  const fetchNotifs = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const mappedNotifs = response.data.data.map((n: any) => ({
+        ...n,
+        id: n._id,
+        time: new Date(n.createdAt).toLocaleDateString("en-IN", { hour: '2-digit', minute: '2-digit' })
+      }));
+      
+      setNotifs(mappedNotifs);
+    } catch (error) {
+      console.error("Failed to fetch notifications");
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem("pay_tracker_notifs", JSON.stringify(notifs));
-  }, [notifs]);
+    if (isAuthenticated) {
+      fetchNotifs();
+      const interval = setInterval(fetchNotifs, 30000); // Poll every 30s
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     localStorage.setItem("pay_tracker_notif_settings", JSON.stringify(settings));
@@ -72,12 +96,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const unreadCount = filteredNotifs.filter((n) => n.unread).length;
 
-  const markAllRead = () => {
-    setNotifs((prev) => prev.map((n) => ({ ...n, unread: false })));
+  const markAllRead = async () => {
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      await axios.patch(`${import.meta.env.VITE_API_URL}/notifications/mark-all`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifs((prev) => prev.map((n) => ({ ...n, unread: false })));
+    } catch (error) {
+      console.error("Failed to mark all read");
+    }
   };
 
-  const markAsRead = (id: string) => {
-    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, unread: false } : n)));
+  const markAsRead = async (id: string) => {
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      await axios.patch(`${import.meta.env.VITE_API_URL}/notifications/${id}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, unread: false } : n)));
+    } catch (error) {
+      console.error("Failed to mark as read");
+    }
   };
 
   const updateSettings = (newSettings: Partial<NotificationSettings>) => {
@@ -85,6 +125,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   };
 
   const addNotif = (notif: Omit<Notif, "id" | "unread" | "time">) => {
+    // Local add only for UI feedback
     const newNotif: Notif = {
       ...notif,
       id: Math.random().toString(36).substr(2, 9),
@@ -104,6 +145,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         markAsRead,
         updateSettings,
         addNotif,
+        refreshNotifs: fetchNotifs
       }}
     >
       {children}
