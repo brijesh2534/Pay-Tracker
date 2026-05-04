@@ -152,9 +152,31 @@ const updateUserDetails = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, user, "Account details updated successfully"))
 })
 
+const updateGstSettings = asyncHandler(async (req, res) => {
+    const { gstEnabled, gstNumber, defaultGstRate, businessState } = req.body
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                gstEnabled,
+                gstNumber,
+                defaultGstRate,
+                businessState
+            }
+        },
+        { new: true }
+    ).select("-password -refreshToken")
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "GST settings updated successfully"))
+})
+
 export {
     registerUser,
     loginUser,
     logoutUser,
-    updateUserDetails
+    updateUserDetails,
+    updateGstSettings
 }

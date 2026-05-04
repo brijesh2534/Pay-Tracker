@@ -32,6 +32,21 @@ const userSchema = new Schema(
         },
         refreshToken: {
             type: String
+        },
+        gstEnabled: {
+            type: Boolean,
+            default: false,
+        },
+        gstNumber: {
+            type: String,
+        },
+        defaultGstRate: {
+            type: Number,
+            default: 18,
+        },
+        businessState: {
+            type: String,
+            default: "Gujarat",
         }
     },
     {

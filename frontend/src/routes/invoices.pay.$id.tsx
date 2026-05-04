@@ -2,7 +2,7 @@ import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { formatINR } from "@/lib/mock";
-import { ShieldCheck, Copy, Check, Loader2, ArrowLeft, Download } from "lucide-react";
+import { ShieldCheck, Copy, Check, ArrowLeft, Download } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,10 @@ import { Button } from "@/components/ui/button";
 export const Route = createFileRoute("/invoices/pay/$id")({
   loader: async ({ params }) => {
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices/${params.id}`);
+      const token = localStorage.getItem("pay_tracker_token");
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/invoices/${params.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       return response.data.data;
     } catch (error) {
       throw notFound();
@@ -22,11 +25,10 @@ export const Route = createFileRoute("/invoices/pay/$id")({
 function DashboardPay() {
   const inv = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [status, setStatus] = useState(inv.status);
+  const status = inv.status;
 
-  const tax = Math.round(inv.amount * 0.18);
-  const total = inv.amount + tax;
+  const tax = inv.gstAmount || 0;
+  const total = inv.totalAmount || (inv.amount + tax);
   const upiId = inv.sme?.upiId || "merchant@upi";
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(inv.sme?.businessName || inv.sme?.name)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Invoice ${inv.invoiceNumber}`)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
@@ -36,21 +38,6 @@ function DashboardPay() {
     setCopied(true);
     toast.success("UPI ID copied");
     setTimeout(() => setCopied(false), 1500);
-  };
-
-  const handlePay = async () => {
-    setPaying(true);
-    try {
-      await axios.patch(`${import.meta.env.VITE_API_URL}/invoices/${inv._id}/status`, {
-        status: "PAID"
-      });
-      setStatus("PAID");
-      toast.success("Payment confirmed!");
-    } catch (error) {
-      toast.error("Failed to update status");
-    } finally {
-      setPaying(false);
-    }
   };
 
   return (
@@ -94,6 +81,7 @@ function DashboardPay() {
                   <div className="text-sm font-bold text-foreground">{inv.sme?.businessName}</div>
                   <div className="text-xs text-muted-foreground">{inv.sme?.email}</div>
                   <div className="text-xs text-muted-foreground font-mono">UPI: {upiId}</div>
+                  {inv.sme?.gstNumber && <div className="text-[10px] text-primary font-bold mt-1">GST: {inv.sme.gstNumber}</div>}
                 </div>
                 <div className="text-right space-y-1">
                   <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-2">My Information</div>
@@ -107,13 +95,26 @@ function DashboardPay() {
 
               <div className="py-6 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground font-medium">Subtotal</span>
+                  <span className="text-muted-foreground font-medium">Taxable Value</span>
                   <span className="tabular-nums font-bold">{formatINR(inv.amount)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground font-medium">Estimated Taxes (18% GST)</span>
-                  <span className="tabular-nums font-bold">{formatINR(tax)}</span>
-                </div>
+                {inv.taxType === "CGST_SGST" ? (
+                  <>
+                    <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-4">
+                      <span>CGST ({inv.gstRate/2}%)</span>
+                      <span className="tabular-nums">{formatINR(inv.cgst)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-4">
+                      <span>SGST ({inv.gstRate/2}%)</span>
+                      <span className="tabular-nums">{formatINR(inv.sgst)}</span>
+                    </div>
+                  </>
+                ) : inv.taxType === "IGST" ? (
+                  <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-4">
+                    <span>IGST ({inv.gstRate}%)</span>
+                    <span className="tabular-nums">{formatINR(inv.igst)}</span>
+                  </div>
+                ) : null}
                 <div className="pt-4 mt-2 border-t border-dashed border-border/60 flex justify-between items-center">
                   <span className="text-base font-black uppercase tracking-tight">Total Amount Due</span>
                   <span className="text-3xl font-black tabular-nums text-primary">{formatINR(total)}</span>
@@ -166,22 +167,22 @@ function DashboardPay() {
                   {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
                 </Button>
 
-                {inv.paymentLink && status !== "PAID" && (
+                {status === "PAID" ? (
+                  <div className="w-full rounded-xl bg-success/10 text-success py-3 text-center font-bold">
+                    Payment Confirmed
+                  </div>
+                ) : inv.paymentLink ? (
                   <Button 
-                    className="w-full rounded-xl h-12 bg-white text-primary border-2 border-primary hover:bg-primary/5 font-bold shadow-none"
+                    className="w-full rounded-xl h-12 bg-primary text-primary-foreground font-black shadow-glow hover:scale-[1.01] transition-all"
                     onClick={() => window.open(inv.paymentLink, "_blank")}
                   >
-                    Pay via Razorpay
+                    Pay via Razorpay (Online)
                   </Button>
+                ) : (
+                  <div className="text-center text-[10px] text-muted-foreground p-3 border border-dashed rounded-xl">
+                    Merchant has not enabled online payments.
+                  </div>
                 )}
-
-                <Button 
-                  className="w-full rounded-xl h-12 bg-primary text-primary-foreground font-black shadow-glow hover:scale-[1.01] active:scale-[0.98] transition-all"
-                  disabled={paying || status === "PAID"}
-                  onClick={handlePay}
-                >
-                  {paying ? <Loader2 className="h-5 w-5 animate-spin" /> : status === "PAID" ? "Transaction Complete" : "Confirm Payment"}
-                </Button>
               </div>
 
               <p className="mt-6 text-[10px] text-center text-muted-foreground leading-relaxed font-medium">

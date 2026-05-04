@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useNotifications } from "../context/NotificationContext";
+import { useAuth } from "../auth";
+import axios from "axios";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -42,6 +44,7 @@ const sections = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "regional", label: "Regional", icon: Globe },
   { id: "billing", label: "Billing", icon: CreditCard },
+  { id: "gst", label: "GST Settings", icon: Shield },
   { id: "danger", label: "Danger zone", icon: Trash2 },
 ];
 
@@ -93,6 +96,7 @@ function SettingsPage() {
             {active === "appearance" && <Appearance />}
             {active === "regional" && <Regional />}
             {active === "billing" && <Billing />}
+            {active === "gst" && <GstSettings />}
             {active === "danger" && <DangerZone />}
           </div>
         </div>
@@ -373,6 +377,114 @@ function Billing() {
             <div className="text-lg font-semibold mt-1">{s.value}</div>
           </div>
         ))}
+      </div>
+    </Panel>
+  );
+}
+
+function GstSettings() {
+  const { user, setUser } = useAuth();
+  const [gstEnabled, setGstEnabled] = useState(user?.gstEnabled || false);
+  const [gstNumber, setGstNumber] = useState(user?.gstNumber || "");
+  const [defaultGstRate, setDefaultGstRate] = useState(user?.defaultGstRate || 18);
+  const [businessState, setBusinessState] = useState(user?.businessState || "Gujarat");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem("pay_tracker_token");
+      const response = await axios.patch(
+        `${import.meta.env.VITE_API_URL}/users/update-gst`,
+        { gstEnabled, gstNumber, defaultGstRate, businessState },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const updatedUser = response.data.data;
+      setUser(updatedUser);
+      localStorage.setItem("pay_tracker_user", JSON.stringify(updatedUser));
+      toast.success("GST settings updated successfully");
+    } catch (error) {
+      toast.error("Failed to update GST settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const states = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Lakshadweep", "Delhi", "Puducherry", "Ladakh", "Jammu and Kashmir"
+  ];
+
+  return (
+    <Panel 
+      title="GST Configuration" 
+      description="Enable and configure tax settings for your business invoices."
+    >
+      <div className="space-y-6">
+        <Row
+          title="Enable GST"
+          description="Automatically calculate CGST/SGST or IGST on all new invoices."
+          control={<Switch checked={gstEnabled} onCheckedChange={setGstEnabled} />}
+        />
+        
+        <Separator />
+
+        <div className="grid sm:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">GST Number</Label>
+            <Input 
+              value={gstNumber} 
+              onChange={(e) => setGstNumber(e.target.value.toUpperCase())} 
+              placeholder="24ABCDE1234F1Z5" 
+              disabled={!gstEnabled}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Default GST Rate (%)</Label>
+            <Select 
+              value={defaultGstRate.toString()} 
+              onValueChange={(val) => setDefaultGstRate(parseInt(val))}
+              disabled={!gstEnabled}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">0% (Exempt)</SelectItem>
+                <SelectItem value="5">5%</SelectItem>
+                <SelectItem value="12">12%</SelectItem>
+                <SelectItem value="18">18% (Standard)</SelectItem>
+                <SelectItem value="28">28%</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Business Registered State</Label>
+            <Select 
+              value={businessState} 
+              onValueChange={setBusinessState}
+              disabled={!gstEnabled}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {states.map(state => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">
+              Used to determine if tax should be split into CGST+SGST or IGST.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-4">
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="gradient-primary text-primary-foreground shadow-glow h-10 px-6 rounded-xl"
+          >
+            {isSaving ? "Saving..." : "Save GST Settings"}
+          </Button>
+        </div>
       </div>
     </Panel>
   );

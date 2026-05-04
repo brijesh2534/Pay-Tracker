@@ -1,10 +1,14 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { formatINR } from "@/lib/mock";
-import { ShieldCheck, Copy, Check, ArrowRight, Lock, Loader2 } from "lucide-react";
+import { ShieldCheck, Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-import { useNotifications } from "../context/NotificationContext";
+import { useAuth } from "../auth";
+import { AppShell } from "@/components/AppShell";
+import { History, Clock, FileText, CheckCircle2, Eye, Upload, Download } from "lucide-react";
+// @ts-ignore
+import html2pdf from "html2pdf.js";
 
 export const Route = createFileRoute("/pay/$id")({
   loader: async ({ params }) => {
@@ -27,13 +31,13 @@ export const Route = createFileRoute("/pay/$id")({
 function PublicPay() {
   const inv = Route.useLoaderData();
   const [copied, setCopied] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [status, setStatus] = useState(inv.status);
-  const { addNotif } = useNotifications();
+  const status = inv.status;
+  const { user } = useAuth();
+  const isCreator = user && inv && (user._id === (inv.sme?._id || inv.userId?._id || inv.userId));
 
-  const tax = Math.round(inv.amount * 0.18);
-  const total = inv.amount + tax;
-  const upiId = inv.sme?.upiId || "merchant@upi";
+  const tax = inv.gstAmount || 0;
+  const total = inv.totalAmount || (inv.amount + tax);
+  const upiId = inv.userId?.upiId || "merchant@upi";
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(inv.sme?.businessName || inv.sme?.name)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Invoice ${inv.invoiceNumber}`)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
 
@@ -44,187 +48,224 @@ function PublicPay() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const handlePay = async () => {
-    setPaying(true);
-    try {
-      await axios.patch(`${import.meta.env.VITE_API_URL}/invoices/${inv._id}/status`, {
-        status: "PAID"
-      });
-      setStatus("PAID");
-      toast.success("Payment successful!", { description: `${formatINR(total)} received` });
-      addNotif({
-        title: "Payment confirmed",
-        description: `${inv.clientName} paid ${inv.invoiceNumber} · ${formatINR(total)}`,
-        type: "success",
-        category: "payment",
-      });
-    } catch (error) {
-      toast.error("Failed to update payment status");
-    } finally {
-      setPaying(false);
-    }
+  const downloadPDF = () => {
+    const element = document.getElementById("invoice-card");
+    if (!element) return;
+    
+    const opt = {
+      margin: 10,
+      filename: `Invoice_${inv.invoiceNumber}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    };
+
+    toast.promise(html2pdf().from(element).set(opt).save(), {
+      loading: 'Generating PDF...',
+      success: 'PDF downloaded successfully',
+      error: 'Failed to generate PDF'
+    });
   };
-
   return (
-    <div className="min-h-screen bg-background gradient-mesh">
-      <header className="h-16 border-b border-border bg-card/60 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto h-full px-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg overflow-hidden border border-border bg-white shadow-card">
-              <img src="/PayTracker-Logo.png" alt="Logo" className="h-full w-full object-cover" />
-            </div>
-            <span className="text-sm font-semibold tracking-tight">Pay Tracker</span>
-          </Link>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5" />
-            Secure payment
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-8 lg:py-12">
+    <AppShell>
+      <div className="max-w-5xl mx-auto py-8">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Invoice card */}
-          <div className="lg:col-span-3 rounded-3xl bg-card border border-border shadow-pop p-6 lg:p-8 animate-fade-up">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <div className="h-10 w-10 rounded-xl gradient-primary mb-3" />
-                <div className="text-base font-semibold">{inv.sme?.businessName || "Business Merchant"}</div>
-                <div className="text-xs text-muted-foreground">{inv.sme?.name}</div>
+          <div id="invoice-card" className="lg:col-span-3 space-y-6">
+            <div className="rounded-3xl bg-card border border-border shadow-pop p-6 lg:p-8 animate-fade-up">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <div className="h-10 w-10 rounded-xl gradient-primary mb-3" />
+                  <div className="text-lg font-bold tracking-tight">{inv.userId?.businessName || "Business Merchant"}</div>
+                  <div className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
+                    {inv.userId?.name} {inv.userId?.gstNumber && `· GST: ${inv.userId.gstNumber}`}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Invoice</div>
+                  <div className="font-mono text-base font-semibold">{inv.invoiceNumber}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Issued {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Invoice</div>
-                <div className="font-mono text-base font-semibold">{inv.invoiceNumber}</div>
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  Issued {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+
+              <div className="grid grid-cols-2 gap-6 py-5 border-y border-border">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Bill to</div>
+                  <div className="text-sm font-semibold">{inv.clientName}</div>
+                  <div className="text-xs text-muted-foreground">{inv.clientEmail}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Due date</div>
+                  <div className="text-sm font-semibold">
+                    {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="py-5 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxable Value</span>
+                  <span className="tabular-nums font-medium">{formatINR(inv.amount)}</span>
+                </div>
+                {inv.taxType === "CGST_SGST" ? (
+                  <>
+                    <div className="flex justify-between text-xs text-muted-foreground/80 pl-4">
+                      <span>CGST ({inv.gstRate/2}%)</span>
+                      <span className="tabular-nums">{formatINR(inv.cgst)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground/80 pl-4">
+                      <span>SGST ({inv.gstRate/2}%)</span>
+                      <span className="tabular-nums">{formatINR(inv.sgst)}</span>
+                    </div>
+                  </>
+                ) : inv.taxType === "IGST" ? (
+                  <div className="flex justify-between text-xs text-muted-foreground/80 pl-4">
+                    <span>IGST ({inv.gstRate}%)</span>
+                    <span className="tabular-nums">{formatINR(inv.igst)}</span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-2xl bg-secondary text-secondary-foreground p-5 flex items-end justify-between">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider opacity-70">Amount due</div>
+                  <div className="text-3xl font-semibold tracking-tight tabular-nums mt-1">{formatINR(total)}</div>
+                </div>
+                <div className="text-[11px] opacity-70 text-right">
+                  Status<br />
+                  <span className={`font-medium uppercase tracking-wider ${status === 'PAID' ? 'text-success' : 'text-primary'}`}>
+                    {status}
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 py-5 border-y border-border">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Bill to</div>
-                <div className="text-sm font-semibold">{inv.clientName}</div>
-                <div className="text-xs text-muted-foreground">{inv.clientEmail}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Due date</div>
-                <div className="text-sm font-semibold">
-                  {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            {/* Timeline Section */}
+            <div className="rounded-3xl bg-card border border-border p-6 lg:p-8 animate-fade-up" style={{ animationDelay: "200ms" }}>
+              <div className="flex items-center gap-2 mb-6">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <History className="h-4 w-4" />
                 </div>
+                <h3 className="font-bold text-lg">Invoice Timeline</h3>
               </div>
-            </div>
 
-            <div className="py-5 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Professional services</span>
-                <span className="tabular-nums font-medium">{formatINR(inv.amount)}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>GST (18%)</span>
-                <span className="tabular-nums">{formatINR(tax)}</span>
-              </div>
-            </div>
-
-            <div className="rounded-2xl bg-secondary text-secondary-foreground p-5 flex items-end justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider opacity-70">Amount due</div>
-                <div className="text-3xl font-semibold tracking-tight tabular-nums mt-1">{formatINR(total)}</div>
-              </div>
-              <div className="text-[11px] opacity-70 text-right">
-                Status<br />
-                <span className={`font-medium uppercase tracking-wider ${status === 'PAID' ? 'text-success' : 'text-primary'}`}>
-                  {status}
-                </span>
+              <div className="space-y-6">
+                {inv.history?.length > 0 ? (
+                  inv.history.map((item: any, idx: number) => {
+                    const Icon = item.action === "CREATED" ? FileText : 
+                                 item.action === "VIEWED" ? Eye :
+                                 item.action === "PROOF_UPLOADED" ? Upload :
+                                 item.action === "PAID" ? CheckCircle2 : Clock;
+                    return (
+                      <div key={idx} className="relative flex gap-4">
+                        {idx !== inv.history.length - 1 && (
+                          <div className="absolute left-[15px] top-[30px] bottom-[-20px] w-0.5 bg-border" />
+                        )}
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
+                          item.action === "PAID" ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
+                        }`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold uppercase tracking-tight">{item.action.replace('_', ' ')}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase">{new Date(item.timestamp).toLocaleString()}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{item.details}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">No history events yet</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Payment card */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="rounded-3xl bg-card border border-border shadow-pop p-6 animate-scale-in" style={{ animationDelay: "120ms" }}>
-              <div className="text-center">
-                <div className="text-xs font-semibold uppercase tracking-wider text-primary">Scan to pay</div>
-                <div className="text-base font-semibold mt-1">UPI · GPay · PhonePe · Paytm</div>
-              </div>
-
-              <div className="mt-5 mx-auto w-52 h-52 rounded-2xl bg-white p-3 shadow-card animate-fade-in border border-border flex items-center justify-center overflow-hidden">
-                {status === "PAID" ? (
-                  <div className="flex flex-col items-center gap-2 text-success">
-                    <Check className="h-12 w-12" />
-                    <span className="text-xs font-bold uppercase">Paid</span>
-                  </div>
-                ) : (
-                  <img src={qrUrl} alt="Payment QR" className="w-full h-full object-contain" />
-                )}
-              </div>
-
-              <button
-                onClick={copy}
-                disabled={status === "PAID"}
-                className="mt-5 w-full group flex items-center justify-between rounded-xl border border-border bg-muted/40 hover:bg-accent transition-colors px-3.5 py-2.5 disabled:opacity-50"
-              >
-                <div className="text-left">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">UPI ID</div>
-                  <div className="text-sm font-mono font-medium">{upiId}</div>
+          {!isCreator && (
+            <div className="lg:col-span-2 space-y-4">
+              <div className="rounded-3xl bg-card border border-border shadow-pop p-6 animate-scale-in" style={{ animationDelay: "120ms" }}>
+                <div className="text-center">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-primary">Scan to pay</div>
+                  <div className="text-base font-semibold mt-1">UPI · GPay · PhonePe · Paytm</div>
                 </div>
-                <span className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${copied ? "bg-success text-success-foreground scale-110" : "bg-card text-muted-foreground"}`}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </span>
-              </button>
 
-              <div className="my-5 flex items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <span className="flex-1 h-px bg-border" />
-                or
-                <span className="flex-1 h-px bg-border" />
-              </div>
+                <div className="mt-5 mx-auto w-52 h-52 rounded-2xl bg-white p-3 shadow-card animate-fade-in border border-border flex items-center justify-center overflow-hidden">
+                  {status === "PAID" ? (
+                    <div className="flex flex-col items-center gap-2 text-success">
+                      <CheckCircle2 className="h-12 w-12" />
+                      <span className="text-xs font-bold uppercase">Paid</span>
+                    </div>
+                  ) : (
+                    <img src={qrUrl} alt="Payment QR" className="w-full h-full object-contain" />
+                  )}
+                </div>
 
-              {inv.paymentLink && status !== "PAID" && (
                 <button
-                  onClick={() => window.open(inv.paymentLink, "_blank")}
-                  className="w-full mb-3 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-primary text-primary px-4 py-3 text-sm font-bold hover:bg-primary/5 transition-all"
+                  onClick={copy}
+                  disabled={status === "PAID"}
+                  className="mt-5 w-full group flex items-center justify-between rounded-xl border border-border bg-muted/40 hover:bg-accent transition-colors px-3.5 py-2.5 disabled:opacity-50"
                 >
-                  Pay via Razorpay (Online)
+                  <div className="text-left">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">UPI ID</div>
+                    <div className="text-sm font-mono font-medium">{upiId}</div>
+                  </div>
+                  <span className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all ${copied ? "bg-success text-success-foreground scale-110" : "bg-card text-muted-foreground"}`}>
+                    {copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </span>
                 </button>
-              )}
 
-              <button
-                onClick={handlePay}
-                disabled={paying || status === "PAID"}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-semibold shadow-glow hover:scale-[1.02] transition-all disabled:opacity-70 disabled:scale-100"
-              >
-                {paying ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : status === "PAID" ? (
-                  "Invoice Paid"
-                ) : (
-                  <>
-                    Confirm UPI/Manual Payment
+                {status === "PAID" ? (
+                  <div className="w-full rounded-xl bg-success/10 text-success py-3 text-center font-bold">
+                    Payment Complete
+                  </div>
+                ) : inv.paymentLink ? (
+                  <button
+                    onClick={() => window.open(inv.paymentLink, "_blank")}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-3 text-sm font-bold shadow-glow hover:scale-[1.02] transition-all"
+                  >
+                    Pay via Razorpay (Online)
                     <ArrowRight className="h-4 w-4" />
-                  </>
+                  </button>
+                ) : (
+                  <div className="text-center text-xs text-muted-foreground p-4 rounded-xl border border-dashed border-border">
+                    Online payment link not generated. Please contact the merchant.
+                  </div>
                 )}
-              </button>
-            </div>
+                
+                <button 
+                  onClick={downloadPDF}
+                  className="w-full mt-4 flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors"
+                >
+                  <Download className="h-5 w-5" />
+                  Download PDF
+                </button>
+              </div>
 
-            <div className="rounded-2xl border border-border bg-card p-4 shadow-card flex items-center gap-3 animate-fade-up" style={{ animationDelay: "200ms" }}>
-              <div className="h-9 w-9 rounded-xl bg-success-soft text-success flex items-center justify-center shrink-0">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <div className="text-xs leading-relaxed">
-                <div className="font-semibold text-foreground">256-bit secure payment</div>
-                <div className="text-muted-foreground">Powered by Razorpay & UPI · PCI-DSS compliant</div>
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-card flex items-center gap-3 animate-fade-up" style={{ animationDelay: "200ms" }}>
+                <div className="h-9 w-9 rounded-xl bg-success-soft text-success flex items-center justify-center shrink-0">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div className="text-xs leading-relaxed">
+                  <div className="font-semibold text-foreground">256-bit secure payment</div>
+                  <div className="text-muted-foreground">Powered by Razorpay & UPI · PCI-DSS compliant</div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         <p className="text-center text-[11px] text-muted-foreground mt-8">
           Need help? Email <span className="font-medium text-foreground">support@paytracker.com</span>
         </p>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

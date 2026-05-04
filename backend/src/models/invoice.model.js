@@ -15,7 +15,40 @@ const invoiceSchema = new Schema(
             type: String,
             required: true,
         },
-        amount: {
+        clientState: {
+            type: String,
+            default: "Gujarat",
+        },
+        amount: { // taxable value
+            type: Number,
+            required: true,
+        },
+        gstRate: {
+            type: Number,
+            default: 0,
+        },
+        gstAmount: {
+            type: Number,
+            default: 0,
+        },
+        cgst: {
+            type: Number,
+            default: 0,
+        },
+        sgst: {
+            type: Number,
+            default: 0,
+        },
+        igst: {
+            type: Number,
+            default: 0,
+        },
+        taxType: {
+            type: String,
+            enum: ["CGST_SGST", "IGST", "NONE"],
+            default: "NONE",
+        },
+        totalAmount: {
             type: Number,
             required: true,
         },
@@ -59,7 +92,14 @@ const invoiceSchema = new Schema(
         reminderSentOnDueDate: {
             type: Boolean,
             default: false,
-        }
+        },
+        history: [
+            {
+                action: { type: String, required: true },
+                timestamp: { type: Date, default: Date.now },
+                details: String
+            }
+        ]
     },
     {
         timestamps: true

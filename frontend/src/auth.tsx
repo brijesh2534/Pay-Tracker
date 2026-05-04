@@ -11,6 +11,10 @@ export interface User {
   role: UserRole;
   businessName?: string;
   upiId?: string;
+  gstEnabled?: boolean;
+  gstNumber?: string;
+  defaultGstRate?: number;
+  businessState?: string;
 }
 
 interface AuthContextType {
@@ -20,6 +24,7 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
+  setUser: (user: User | null) => void;
   isLoading: boolean;
 }
 
@@ -112,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateUser, isLoading }}>
+    <AuthContext.Provider value={{ user, setUser, isAuthenticated: !!user, login, register, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

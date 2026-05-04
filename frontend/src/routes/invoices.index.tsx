@@ -46,7 +46,7 @@ function InvoiceList() {
             if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
               addNotif({
                 title: "Payment received (Auto)",
-                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
+                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.totalAmount || newInv.amount)}`,
                 type: "success",
                 category: "payment",
               });
@@ -224,7 +224,7 @@ function InvoiceList() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 font-semibold tabular-nums">{formatINR(inv.amount)}</td>
+                      <td className="px-5 py-3.5 font-semibold tabular-nums">{formatINR(inv.totalAmount || inv.amount)}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">
                         {new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                       </td>

@@ -5,6 +5,15 @@ import { formatINR } from "@/lib/mock";
 import { ArrowLeft, Send, Save, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
+import { useAuth } from "../auth";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/invoices/new")({
   head: () => ({
@@ -60,17 +69,26 @@ function FloatingInput({
 }
 
 function CreateInvoice() {
+  const { user } = useAuth();
   const [client, setClient] = useState("");
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [due, setDue] = useState("");
   const [notes, setNotes] = useState("");
+  const [clientState, setClientState] = useState(user?.businessState || "Gujarat");
+  const [gstRate, setGstRate] = useState(user?.gstEnabled ? user.defaultGstRate || 18 : 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
+  const states = [
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Lakshadweep", "Delhi", "Puducherry", "Ladakh", "Jammu and Kashmir"
+  ];
+
   const amountNum = Number(amount.replace(/[^0-9.]/g, "")) || 0;
-  const tax = Math.round(amountNum * 0.18);
-  const total = amountNum + tax;
+  const gstAmount = Math.round((amountNum * gstRate) / 100);
+  const total = amountNum + gstAmount;
+  const isSameState = user?.businessState === clientState;
+  const taxType = gstRate > 0 ? (isSameState ? "CGST_SGST" : "IGST") : "NONE";
 
   const handleSend = async () => {
     if (!client || !email || !amountNum || !due) {
@@ -84,7 +102,9 @@ function CreateInvoice() {
       await axios.post(`${import.meta.env.VITE_API_URL}/invoices`, {
         clientName: client,
         clientEmail: email,
-        amount: total, // Saving the total amount
+        clientState,
+        amount: amountNum,
+        gstRate,
         dueDate: due,
       }, {
         headers: {
@@ -135,16 +155,49 @@ function CreateInvoice() {
                 <FloatingInput label="Amount" prefix="₹" value={amount} onChange={setAmount} />
                 <FloatingInput label="Due date" type="date" value={due} onChange={setDue} />
               </div>
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Notes (optional)</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Thanks for your business!"
-                  className="mt-1.5 w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all resize-none"
-                />
-              </label>
+            </div>
+
+            <div className="h-px bg-border" />
+
+            <div className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tax details</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Client State</Label>
+                  <Select value={clientState} onValueChange={setClientState}>
+                    <SelectTrigger className="rounded-xl border-border bg-card h-[52px] shadow-none"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {states.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-1">GST Rate (%)</Label>
+                  <Select value={gstRate.toString()} onValueChange={(v) => setGstRate(parseInt(v))}>
+                    <SelectTrigger className="rounded-xl border-border bg-card h-[52px] shadow-none"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0% (Exempt)</SelectItem>
+                      <SelectItem value="5">5%</SelectItem>
+                      <SelectItem value="12">12%</SelectItem>
+                      <SelectItem value="18">18% (Standard)</SelectItem>
+                      <SelectItem value="28">28%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-px bg-border" />
+
+            <div className="space-y-4">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes (optional)</div>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                placeholder="Thanks for your business!"
+                className="w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all resize-none"
+              />
             </div>
 
             <div className="flex items-center gap-2 pt-2">
@@ -181,7 +234,7 @@ function CreateInvoice() {
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Invoice</div>
-                    <div className="font-mono text-sm font-semibold">#INV-2049</div>
+                    <div className="font-mono text-sm font-semibold">#INV-{new Date().getFullYear()}-{Math.floor(1000 + Math.random() * 9000)}</div>
                   </div>
                 </div>
 
@@ -201,16 +254,29 @@ function CreateInvoice() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Subtotal</span>
+                    <span>Taxable Amount</span>
                     <span className="tabular-nums">{formatINR(amountNum)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>GST (18%)</span>
-                    <span className="tabular-nums">{formatINR(tax)}</span>
-                  </div>
+                  {taxType === "CGST_SGST" ? (
+                    <>
+                      <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-2">
+                        <span>CGST ({gstRate/2}%)</span>
+                        <span className="tabular-nums">{formatINR(gstAmount/2)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-2">
+                        <span>SGST ({gstRate/2}%)</span>
+                        <span className="tabular-nums">{formatINR(gstAmount/2)}</span>
+                      </div>
+                    </>
+                  ) : taxType === "IGST" ? (
+                    <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-2">
+                      <span>IGST ({gstRate}%)</span>
+                      <span className="tabular-nums">{formatINR(gstAmount)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex justify-between font-semibold text-base pt-2 border-t border-border">
-                    <span>Total</span>
-                    <span className="tabular-nums">{formatINR(total)}</span>
+                    <span>Total (Incl. Tax)</span>
+                    <span className="tabular-nums text-primary">{formatINR(total)}</span>
                   </div>
                 </div>
 

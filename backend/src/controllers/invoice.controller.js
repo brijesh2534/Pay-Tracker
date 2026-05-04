@@ -30,7 +30,7 @@ const getRazorpayInstance = () => {
 };
 
 const createInvoice = asyncHandler(async (req, res) => {
-    const { clientName, clientEmail, amount, dueDate, paymentMethod } = req.body;
+    const { clientName, clientEmail, amount, dueDate, paymentMethod, clientState, gstRate: manualGstRate } = req.body;
 
     if (
         [clientName, clientEmail, amount, dueDate].some((field) => 
@@ -39,6 +39,26 @@ const createInvoice = asyncHandler(async (req, res) => {
     ) {
         throw new ApiError(400, "All fields are required");
     }
+
+    const user = await User.findById(req.user._id);
+    let gstRate = manualGstRate || (user.gstEnabled ? user.defaultGstRate : 0);
+    let gstAmount = 0;
+    let cgst = 0, sgst = 0, igst = 0;
+    let taxType = "NONE";
+
+    if (user.gstEnabled || manualGstRate > 0) {
+        gstAmount = (amount * gstRate) / 100;
+        if (user.businessState === (clientState || user.businessState)) {
+            taxType = "CGST_SGST";
+            cgst = gstAmount / 2;
+            sgst = gstAmount / 2;
+        } else {
+            taxType = "IGST";
+            igst = gstAmount;
+        }
+    }
+
+    const totalAmount = amount + gstAmount;
 
     // Generate unique invoice number: INV-YEAR-RANDOM
     const date = new Date();
@@ -55,7 +75,7 @@ const createInvoice = asyncHandler(async (req, res) => {
     if (razorpayInstance) {
         try {
             const razorpayResponse = await razorpayInstance.paymentLink.create({
-                amount: amount * 100, // amount in paise
+                amount: Math.round(totalAmount * 100), // amount in paise, inclusive of GST
                 currency: "INR",
                 accept_partial: false,
                 description: `Invoice ${invoiceNumber} for ${clientName}`,
@@ -83,14 +103,26 @@ const createInvoice = asyncHandler(async (req, res) => {
         userId: req.user?._id,
         clientName,
         clientEmail,
-        amount,
+        clientState: clientState || user.businessState,
+        amount, // taxable value
+        gstRate,
+        gstAmount,
+        cgst,
+        sgst,
+        igst,
+        taxType,
+        totalAmount,
         dueDate,
         invoiceNumber,
         token,
         paymentLink,
         razorpayLinkId,
         paymentMethod: paymentMethod || "RAZORPAY",
-        status: "PENDING"
+        status: "PENDING",
+        history: [{
+            action: "CREATED",
+            details: `Invoice created with number ${invoiceNumber}`
+        }]
     });
 
     if (!invoice) {
@@ -192,7 +224,7 @@ const getInvoiceById = asyncHandler(async (req, res) => {
     
     // For public access, we don't check userId. 
     // We populate the 'userId' field which contains the SME/Merchant info.
-    const invoice = await Invoice.findById(id).populate("userId", "name businessName upiId");
+    const invoice = await Invoice.findById(id).populate("userId", "name businessName upiId gstNumber businessState gstEnabled");
 
     if (!invoice) {
         throw new ApiError(404, "Invoice not found");
@@ -219,6 +251,16 @@ const getInvoiceById = asyncHandler(async (req, res) => {
     const invoiceData = invoice.toObject();
     invoiceData.sme = invoiceData.userId;
     delete invoiceData.userId;
+
+    // Log viewed event if not already viewed in this session (simplified)
+    // We only log if it's not the owner
+    if (!req.user || req.user._id.toString() !== invoice.userId._id.toString()) {
+        invoice.history.push({
+            action: "VIEWED",
+            details: `Invoice viewed by ${req.user ? req.user.name : "Public User"}`
+        });
+        await invoice.save();
+    }
 
     return res.status(200).json(
         new ApiResponse(200, invoiceData, "Invoice fetched successfully")
@@ -290,6 +332,12 @@ const updateInvoiceStatus = asyncHandler(async (req, res) => {
         action: status === "PAID" ? "PAYMENT_RECEIVED" : "STATUS_UPDATED",
         details: `Invoice status updated to ${status}`
     });
+
+    invoice.history.push({
+        action: status,
+        details: `Invoice marked as ${status.toLowerCase()}`
+    });
+    await invoice.save();
 
     return res.status(200).json(
         new ApiResponse(200, invoice, `Invoice marked as ${status.toLowerCase()}`)
@@ -364,6 +412,10 @@ const uploadPaymentProof = asyncHandler(async (req, res) => {
     }
 
     invoice.paymentProof = uploadResult.secure_url;
+    invoice.history.push({
+        action: "PROOF_UPLOADED",
+        details: "Client uploaded payment proof screenshot"
+    });
     await invoice.save();
 
     await logActivity({
@@ -380,7 +432,7 @@ const uploadPaymentProof = asyncHandler(async (req, res) => {
 
 const getReceivedInvoices = asyncHandler(async (req, res) => {
     const invoices = await Invoice.find({ clientEmail: req.user.email })
-        .populate("userId", "businessName name")
+        .populate("userId", "businessName name upiId gstNumber businessState gstEnabled")
         .sort({ createdAt: -1 });
 
     return res.status(200).json(

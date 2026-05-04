@@ -33,7 +33,7 @@ import {
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/invoices", label: "Invoices", icon: FileText },
-  { to: "/invoices/received", label: "Received Invoices", icon: CreditCard },
+  { to: "/invoices/received", label: "Received", icon: CreditCard },
   { to: "/invoices/new", label: "Create", icon: PlusCircle },
   { to: "/search", label: "Search", icon: Search },
 ];
@@ -284,7 +284,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="flex-1 p-4 lg:p-8 animate-fade-in">{children}</main>
 
-        <nav className="lg:hidden sticky bottom-0 glass border-t border-border grid grid-cols-4 px-2 py-2">
+        <nav className="lg:hidden sticky bottom-0 glass border-t border-border grid grid-cols-5 px-1 py-2">
           {nav.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);

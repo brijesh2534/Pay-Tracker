@@ -14,19 +14,19 @@ import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
-// Routes that don't require auth (or handle it internally)
+// Public Routes (No Auth)
 router.route("/search").get(searchInvoice);
 
-// All other invoice routes require authentication
-router.use(verifyJWT);
+// Protected Routes (Require Auth)
+router.route("/stats").get(verifyJWT, getDashboardStats);
+router.route("/received").get(verifyJWT, getReceivedInvoices);
+router.route("/").post(verifyJWT, createInvoice).get(verifyJWT, getInvoices);
 
-router.route("/stats").get(getDashboardStats);
-router.route("/received").get(getReceivedInvoices);
-router.route("/").post(createInvoice).get(getInvoices);
-
-// Dynamic ID routes MUST be last
+// Public dynamic routes
 router.route("/:id").get(getInvoiceById);
 router.route("/:id/status").patch(updateInvoiceStatus);
+
+// Protected dynamic routes
 router.route("/:id/proof").post(upload.single("proof"), uploadPaymentProof);
 
 export default router;

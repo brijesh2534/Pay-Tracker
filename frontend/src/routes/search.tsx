@@ -2,10 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Search, FileText, Download, Upload, Loader2 } from "lucide-react";
+import { Search, FileText, Download, Upload, Loader2, History, Clock, Eye, CheckCircle2 } from "lucide-react";
 import { formatINR } from "@/lib/mock";
+// @ts-ignore
+import html2pdf from "html2pdf.js";
 import { StatusBadge } from "@/components/StatusBadge";
 import QRCode from "qrcode";
+import { useAuth } from "../auth";
+import { AppShell } from "@/components/AppShell";
 
 export const Route = createFileRoute("/search")({
   component: InvoiceSearchPage,
@@ -18,6 +22,9 @@ function InvoiceSearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const { user } = useAuth();
+
+  const isCreator = user && invoice && user._id === invoice.userId;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +47,25 @@ function InvoiceSearchPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const downloadPDF = () => {
+    const element = document.getElementById("invoice-result");
+    if (!element) return;
+    
+    const opt = {
+      margin: 10,
+      filename: `Invoice_${invoice.invoiceNumber}.pdf`,
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    };
+
+    toast.promise(html2pdf().from(element).set(opt).save(), {
+      loading: 'Generating PDF...',
+      success: 'PDF downloaded successfully',
+      error: 'Failed to generate PDF'
+    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,8 +91,8 @@ function InvoiceSearchPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-8">
-      <div className="max-w-2xl mx-auto space-y-8">
+    <AppShell>
+      <div className="max-w-2xl mx-auto space-y-8 py-4 sm:py-8">
         <div className="text-center space-y-2">
           <Link to="/" className="inline-flex items-center gap-2 text-primary font-bold text-xl mb-4">
             <div className="h-8 w-8 bg-primary text-white rounded-lg flex items-center justify-center">P</div>
@@ -117,7 +143,7 @@ function InvoiceSearchPage() {
         </div>
 
         {invoice && (
-          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-pop animate-fade-up">
+          <div id="invoice-result" className="bg-card border border-border rounded-2xl overflow-hidden shadow-pop animate-fade-up">
             <div className="bg-primary/5 p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Invoice Found</div>
@@ -141,20 +167,74 @@ function InvoiceSearchPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 pt-4 border-top border-border">
-                <Link
-                  to="/pay/$id"
-                  params={{ id: invoice._id }}
-                  className="flex-1 bg-primary text-primary-foreground font-bold py-3 rounded-xl text-center shadow-glow hover:opacity-90 transition-opacity"
-                >
-                  Pay Now
-                </Link>
+                {invoice.status === "PAID" ? (
+                  <div className="flex-1 bg-success/10 text-success border border-success/20 font-bold py-3 rounded-xl text-center">
+                    Payment Received
+                  </div>
+                ) : isCreator ? (
+                  <div className="flex-1 bg-primary/10 text-primary border border-primary/20 font-bold py-3 rounded-xl text-center">
+                    Invoice Created by You
+                  </div>
+                ) : (
+                  <Link
+                    to="/pay/$id"
+                    params={{ id: invoice._id }}
+                    className="flex-1 bg-primary text-primary-foreground font-bold py-3 rounded-xl text-center shadow-glow hover:opacity-90 transition-opacity"
+                  >
+                    Pay Now
+                  </Link>
+                )}
                 <button 
-                  onClick={() => window.print()}
+                  onClick={downloadPDF}
                   className="flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors"
                 >
                   <Download className="h-5 w-5" />
                   Download PDF
                 </button>
+              </div>
+
+              {/* Timeline Section */}
+              <div className="pt-6 border-t border-border">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <History className="h-4 w-4" />
+                  </div>
+                  <h3 className="font-bold text-base">Invoice Timeline</h3>
+                </div>
+
+                <div className="space-y-6">
+                  {invoice.history?.length > 0 ? (
+                    invoice.history.map((item: any, idx: number) => {
+                      const Icon = item.action === "CREATED" ? FileText : 
+                                   item.action === "VIEWED" ? Eye :
+                                   item.action === "PROOF_UPLOADED" ? Upload :
+                                   item.action === "PAID" ? CheckCircle2 : Clock;
+                      return (
+                        <div key={idx} className="relative flex gap-4">
+                          {idx !== invoice.history.length - 1 && (
+                            <div className="absolute left-[13px] top-[26px] bottom-[-24px] w-0.5 bg-border" />
+                          )}
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 z-10 ${
+                            item.action === "PAID" ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
+                          }`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold uppercase tracking-tight">{item.action.replace('_', ' ')}</span>
+                              <span className="text-[9px] text-muted-foreground uppercase">{new Date(item.timestamp).toLocaleString()}</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{item.details}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground italic text-xs">
+                      No history recorded
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="pt-6 border-t border-border">
@@ -199,6 +279,6 @@ function InvoiceSearchPage() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
