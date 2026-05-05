@@ -20,6 +20,9 @@
 - **🔔 Notification System**: In-app notifications for payment receipts, overdue invoices, and system updates.
 - **🛡️ Secure Authentication**: JWT-based authentication with Access & Refresh tokens stored in secure `httpOnly` cookies.
 - **🎨 Premium UI/UX**: Built with a "glassmorphism" aesthetic, featuring mesh gradients, smooth Framer Motion transitions, and a fully responsive design.
+- **📱 Mobile Optimized**: High-quality bottom navigation with thumb-friendly touch targets and full layout clearance for mobile users.
+- **📄 Professional PDF Export**: Generate branded, pixel-perfect invoice PDFs directly from the browser using `html2pdf.js`.
+- **🕒 Smart Timeline**: Track the entire lifecycle of an invoice (Created, Viewed, Paid) with a visual history log.
 - **🔑 Admin Panel**: Specialized dashboard for system administrators to monitor platform-wide activity.
 
 ---

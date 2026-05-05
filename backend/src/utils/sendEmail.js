@@ -50,7 +50,6 @@ const sendEmail = async (email, subject, message) => {
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    console.log(`📧 Attempting to send email via Google API to: ${email}`);
     
     const res = await gmail.users.messages.send({
       userId: 'me',
@@ -59,7 +58,6 @@ const sendEmail = async (email, subject, message) => {
       },
     });
 
-    console.log("✅ Email sent successfully via Google API:", res.data.id);
     return true;
   } catch (error) {
     console.error("❌ Google API Error:", error.message);

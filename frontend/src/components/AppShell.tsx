@@ -282,7 +282,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 animate-fade-in">{children}</main>
+        <main className="flex-1 p-4 pb-28 lg:p-8 animate-fade-in">{children}</main>
 
         <nav className="lg:hidden sticky bottom-0 glass border-t border-border grid grid-cols-5 px-1 py-2">
           {nav.map((item) => {
@@ -293,11 +293,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.to}
                 to={item.to}
-                className={`flex flex-col items-center gap-1 py-1.5 rounded-lg text-[11px] ${active ? "text-primary" : "text-muted-foreground"
+                className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl transition-all duration-300 ${active 
+                    ? "text-primary bg-primary/5 font-semibold" 
+                    : "text-muted-foreground hover:bg-accent/50"
                   }`}
               >
-                <Icon className="h-5 w-5" />
-                {item.label}
+                <Icon className={`h-6 w-6 transition-transform duration-300 ${active ? "scale-110" : ""}`} />
+                <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
               </Link>
             );
           })}

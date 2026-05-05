@@ -58,7 +58,6 @@ export const sendInvoiceEmail = async ({ to, subject, html }) => {
             subject,
             html
         });
-        console.log("Email sent successfully to:", to);
     } catch (err) {
         console.error("Email Error:", err);
     }

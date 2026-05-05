@@ -73,7 +73,6 @@ const generateReminderEmail = (invoice, user, type) => {
 export const initCronJobs = () => {
     // Run every day at 12:00 PM
     cron.schedule("0 12 * * *", async () => {
-        console.log("⏰ [CRON] Starting daily payment sync and reminder job...");
         
         try {
             const today = new Date();
@@ -95,7 +94,6 @@ export const initCronJobs = () => {
                     try {
                         const plink = await rzp.paymentLink.fetch(inv.razorpayLinkId);
                         if (plink.status === "paid") {
-                            console.log(`✅ [CRON] ${inv.invoiceNumber} detected as PAID on Razorpay. Updating...`);
                             inv.status = "PAID";
                             inv.paidAt = new Date();
                             await inv.save();
@@ -111,7 +109,6 @@ export const initCronJobs = () => {
 
                 // A. Upcoming Reminder (Tomorrow)
                 if (invDueDate.getTime() === tomorrow.getTime() && !inv.reminderSent1DayBefore) {
-                    console.log(`📧 [CRON] Sending 1-day reminder for ${inv.invoiceNumber}`);
                     const html = generateReminderEmail(inv, inv.userId, "UPCOMING");
                     const sent = await sendEmail(inv.clientEmail, `Reminder: Payment due tomorrow for ${inv.invoiceNumber}`, html);
                     if (sent) {
@@ -122,7 +119,6 @@ export const initCronJobs = () => {
 
                 // B. Due Today Reminder
                 if (invDueDate.getTime() === today.getTime() && !inv.reminderSentOnDueDate) {
-                    console.log(`📧 [CRON] Sending due-today reminder for ${inv.invoiceNumber}`);
                     const html = generateReminderEmail(inv, inv.userId, "DUE_TODAY");
                     const sent = await sendEmail(inv.clientEmail, `Final Reminder: Payment due today for ${inv.invoiceNumber}`, html);
                     if (sent) {
@@ -134,13 +130,11 @@ export const initCronJobs = () => {
 
                 // C. Auto-mark as OVERDUE
                 if (invDueDate.getTime() < today.getTime() && inv.status === "PENDING") {
-                    console.log(`📉 [CRON] Marking ${inv.invoiceNumber} as OVERDUE`);
                     inv.status = "OVERDUE";
                     await inv.save();
                 }
             }
 
-            console.log("🏁 [CRON] Daily job completed.");
         } catch (error) {
             console.error("❌ [CRON] Fatal Error:", error);
         }
