@@ -37,9 +37,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Mock persistence
     const storedUser = localStorage.getItem("pay_tracker_user");
-    if (storedUser) {
+    const token = localStorage.getItem("pay_tracker_token");
+    if (storedUser && !token) {
+      localStorage.removeItem("pay_tracker_user");
+      setUser(null);
+    } else if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
     setIsLoading(false);

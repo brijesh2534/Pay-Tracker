@@ -26,20 +26,16 @@ import { CountUp } from "@/components/CountUp";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatINR, type InvoiceStatus } from "@/lib/mock";
 import { useAuth } from "../auth";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useNotifications } from "../context/NotificationContext";
+import { hasStoredSession } from "@/lib/session";
 
 export const Route = createFileRoute("/")({
-  beforeLoad: ({ context }) => {
-    const storedUser = localStorage.getItem("pay_tracker_user");
-    const isAuthenticated = context.auth.isAuthenticated || !!storedUser;
-
-    if (!isAuthenticated) {
-      throw redirect({
-        to: "/login",
-      });
+  beforeLoad: () => {
+    if (!hasStoredSession()) {
+      throw redirect({ to: "/login" });
     }
   },
   head: () => ({
@@ -115,40 +111,69 @@ function Dashboard() {
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { addNotif } = useNotifications();
+  const lastInvoicesRef = useRef<any[]>([]);
 
   const fetchData = async () => {
+    const token = localStorage.getItem("pay_tracker_token");
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    const headers = { Authorization: `Bearer ${token}` };
+    const emptyStats = { totalRevenue: 0, pending: 0, overdue: 0, cashflow: [] };
+
     try {
-      const token = localStorage.getItem("pay_tracker_token");
-      const headers = { Authorization: `Bearer ${token}` };
-      
-      const [invRes, statsRes, logsRes] = await Promise.all([
+      const [invResult, statsResult, logsResult] = await Promise.allSettled([
         axios.get(`${import.meta.env.VITE_API_URL}/invoices`, { headers }),
         axios.get(`${import.meta.env.VITE_API_URL}/invoices/stats`, { headers }),
-        axios.get(`${import.meta.env.VITE_API_URL}/users/activity`, { headers })
+        axios.get(`${import.meta.env.VITE_API_URL}/users/activity`, { headers }),
       ]);
-      
-      const newInvoices = invRes.data.data;
-      
-      // Check for newly paid invoices to add notifications
-      if (invoices.length > 0) {
-        newInvoices.forEach((newInv: any) => {
-          const oldInv = invoices.find(i => i._id === newInv._id);
-          if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
-            addNotif({
-              title: "Payment received (Auto)",
-              description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
-              type: "success",
-              category: "payment",
-            });
-          }
-        });
+
+      if (invResult.status === "fulfilled") {
+        const raw = invResult.value.data?.data;
+        const newInvoices = Array.isArray(raw) ? raw : [];
+        const prevInvoices = lastInvoicesRef.current;
+        if (prevInvoices.length > 0) {
+          newInvoices.forEach((newInv: any) => {
+            const oldInv = prevInvoices.find((i) => i._id === newInv._id);
+            if (oldInv && oldInv.status === "PENDING" && newInv.status === "PAID") {
+              addNotif({
+                title: "Payment received (Auto)",
+                description: `${newInv.clientName} paid ${newInv.invoiceNumber} · ${formatINR(newInv.amount * 1.18)}`,
+                type: "success",
+                category: "payment",
+              });
+            }
+          });
+        }
+        lastInvoicesRef.current = newInvoices;
+        setInvoices(newInvoices);
+      } else {
+        setInvoices([]);
       }
 
-      setInvoices(newInvoices);
-      setStats(statsRes.data.data);
-      setLogs(logsRes.data.data);
-    } catch (error) {
-      toast.error("Failed to load dashboard data");
+      if (statsResult.status === "fulfilled") {
+        const s = statsResult.value.data?.data;
+        setStats(s && typeof s === "object" ? s : emptyStats);
+      } else {
+        setStats(emptyStats);
+      }
+
+      if (logsResult.status === "fulfilled") {
+        const raw = logsResult.value.data?.data;
+        setLogs(Array.isArray(raw) ? raw : []);
+      } else {
+        setLogs([]);
+      }
+
+      const criticalFailed = invResult.status === "rejected" || statsResult.status === "rejected";
+      if (criticalFailed) {
+        toast.error("Failed to load dashboard data", { id: "dashboard-load-error" });
+      } else {
+        toast.dismiss("dashboard-load-error");
+      }
+    } catch {
+      toast.error("Failed to load dashboard data", { id: "dashboard-load-error" });
     } finally {
       setIsLoading(false);
     }
@@ -173,7 +198,7 @@ function Dashboard() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dayName = days[d.getDay()];
-      
+
       const paidInvoices = invoices.filter(inv => {
         if (inv.status !== "PAID") return false;
         const invDate = new Date(inv.paidAt || inv.updatedAt || inv.createdAt);
@@ -202,7 +227,7 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 max-w-7xl mx-auto min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">
@@ -233,8 +258,8 @@ function Dashboard() {
               <StatCard label="Overdue Amount" value={overdue} icon={AlertTriangle} trend="-0%" tone="destructive" delay={160} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-5 shadow-card animate-fade-up" style={{ animationDelay: "200ms" }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-w-0">
+              <div className="lg:col-span-2 min-w-0 rounded-2xl bg-card border border-border p-5 shadow-card animate-fade-up" style={{ animationDelay: "200ms" }}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h2 className="text-base font-semibold">Cashflow</h2>
@@ -244,8 +269,8 @@ function Dashboard() {
                     <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-primary" />Revenue</span>
                   </div>
                 </div>
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-72 w-full min-h-0 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
                     <AreaChart data={dynamicCashflow} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                       <defs>
                         <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
@@ -292,8 +317,8 @@ function Dashboard() {
               <div className="rounded-2xl bg-card border border-border p-5 shadow-card animate-fade-up" style={{ animationDelay: "320ms" }}>
                 <h2 className="text-base font-semibold">This week</h2>
                 <p className="text-xs text-muted-foreground mb-4">Daily collections</p>
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
+                <div className="h-48 w-full min-h-0 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                     <BarChart data={dynamicWeekly} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid stroke="oklch(0.92 0.012 255)" vertical={false} />
                       <XAxis dataKey="day" stroke="oklch(0.554 0.046 257)" fontSize={11} axisLine={false} tickLine={false} />
@@ -366,16 +391,15 @@ function Dashboard() {
                   ) : (
                     logs.map((log) => (
                       <div key={log._id} className="flex items-start gap-3 px-5 py-3.5 hover:bg-accent/40 transition-colors">
-                        <div className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-                          log.action === 'PAYMENT_RECEIVED' ? 'bg-success-soft text-success' : 
-                          log.action === 'INVOICE_CREATED' ? 'bg-primary-soft text-primary' : 
-                          log.action === 'PAYMENT_PROOF_UPLOADED' ? 'bg-warning-soft text-warning' :
-                          'bg-muted text-muted-foreground'
-                        }`}>
-                          {log.action === 'PAYMENT_RECEIVED' ? <CheckCircle2 className="h-4 w-4" /> : 
-                           log.action === 'INVOICE_CREATED' ? <Plus className="h-4 w-4" /> : 
-                           log.action === 'PAYMENT_PROOF_UPLOADED' ? <Upload className="h-4 w-4" /> :
-                           <Clock className="h-4 w-4" />}
+                        <div className={`mt-0.5 h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${log.action === 'PAYMENT_RECEIVED' ? 'bg-success-soft text-success' :
+                            log.action === 'INVOICE_CREATED' ? 'bg-primary-soft text-primary' :
+                              log.action === 'PAYMENT_PROOF_UPLOADED' ? 'bg-warning-soft text-warning' :
+                                'bg-muted text-muted-foreground'
+                          }`}>
+                          {log.action === 'PAYMENT_RECEIVED' ? <CheckCircle2 className="h-4 w-4" /> :
+                            log.action === 'INVOICE_CREATED' ? <Plus className="h-4 w-4" /> :
+                              log.action === 'PAYMENT_PROOF_UPLOADED' ? <Upload className="h-4 w-4" /> :
+                                <Clock className="h-4 w-4" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-foreground">{log.details}</div>

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { formatINR } from "@/lib/mock";
-import { ArrowLeft, Send, Save, Sparkles } from "lucide-react";
+import { ArrowLeft, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useAuth } from "../auth";
@@ -39,32 +39,32 @@ function FloatingInput({
   prefix?: string;
 }) {
   const [focused, setFocused] = useState(false);
-  const hasValue = value.length > 0;
-  const lift = focused || hasValue;
 
   return (
-    <label className="relative block">
-      <span
-        className={`absolute left-3.5 transition-all duration-200 pointer-events-none ${
-          lift ? "top-1.5 text-[10px] font-medium uppercase tracking-wider" : "top-1/2 -translate-y-1/2 text-sm"
-        } ${focused ? "text-primary" : "text-muted-foreground"}`}
-      >
+    <div className="space-y-1.5">
+      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-1">
         {label}
-      </span>
-      <div className={`flex items-center rounded-xl border bg-card transition-all ${focused ? "border-primary ring-4 ring-primary/10" : "border-border"}`}>
-        {prefix && (
-          <span className="pl-3.5 pt-4 text-sm text-muted-foreground tabular-nums">{prefix}</span>
-        )}
+      </Label>
+      <div
+        className={`flex min-h-[52px] items-stretch rounded-xl border bg-card transition-all ${focused ? "border-primary ring-4 ring-primary/10" : "border-border"
+          }`}
+      >
+        {prefix ? (
+          <span className="flex w-10 shrink-0 items-center justify-center border-r border-border/60 text-sm text-muted-foreground tabular-nums select-none">
+            {prefix}
+          </span>
+        ) : null}
         <input
           type={type}
           value={value}
+          placeholder={label}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className="w-full bg-transparent outline-none px-3.5 pt-5 pb-1.5 text-sm tabular-nums"
+          className="w-full bg-transparent outline-none px-3.5 py-2.5 text-sm tabular-nums"
         />
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -112,10 +112,10 @@ function CreateInvoice() {
         }
       });
 
-      toast.success("Invoice created successfully!", { 
-        description: `${client} · ${formatINR(total)}` 
+      toast.success("Invoice created successfully!", {
+        description: `${client} · ${formatINR(total)}`
       });
-      
+
       // Navigate back to invoices list
       navigate({ to: "/invoices" });
     } catch (error: any) {
@@ -209,14 +209,7 @@ function CreateInvoice() {
                 <Send className="h-4 w-4" />
                 {isSubmitting ? "Creating..." : "Send invoice"}
               </button>
-              <button
-                disabled={isSubmitting}
-                onClick={() => toast("Saved as draft")}
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" />
-                Save draft
-              </button>
+
             </div>
           </div>
 
@@ -228,9 +221,11 @@ function CreateInvoice() {
               <div className="rounded-2xl bg-card border border-border shadow-pop p-6 transition-all">
                 <div className="flex items-start justify-between mb-6">
                   <div>
-                    <div className="h-9 w-9 rounded-lg gradient-primary mb-2" />
-                    <div className="text-sm font-semibold">Brightlabs Studio</div>
-                    <div className="text-[11px] text-muted-foreground">hello@brightlabs.in</div>
+                    <div className="h-9 w-9 rounded-lg gradient-primary mb-2 flex items-center justify-center text-[10px] font-bold text-white uppercase tracking-tighter">
+                      {(user?.businessName || user?.name || "B").split(" ").map((n: any) => n[0]).join("").slice(0, 2)}
+                    </div>
+                    <div className="text-sm font-semibold">{user?.businessName || user?.name || "Business Merchant"}</div>
+                    <div className="text-[11px] text-muted-foreground">{user?.email || "hello@merchant.in"}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Invoice</div>
@@ -260,12 +255,12 @@ function CreateInvoice() {
                   {taxType === "CGST_SGST" ? (
                     <>
                       <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-2">
-                        <span>CGST ({gstRate/2}%)</span>
-                        <span className="tabular-nums">{formatINR(gstAmount/2)}</span>
+                        <span>CGST ({gstRate / 2}%)</span>
+                        <span className="tabular-nums">{formatINR(gstAmount / 2)}</span>
                       </div>
                       <div className="flex justify-between text-[11px] text-muted-foreground/80 pl-2">
-                        <span>SGST ({gstRate/2}%)</span>
-                        <span className="tabular-nums">{formatINR(gstAmount/2)}</span>
+                        <span>SGST ({gstRate / 2}%)</span>
+                        <span className="tabular-nums">{formatINR(gstAmount / 2)}</span>
                       </div>
                     </>
                   ) : taxType === "IGST" ? (

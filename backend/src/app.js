@@ -64,4 +64,33 @@ app.use("/api/v1/invoices", invoiceRouter)
 app.use("/api/v1/admin", adminRouter)
 app.use("/api/v1/notifications", notificationRouter)
 
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: `Cannot ${req.method} ${req.originalUrl}`,
+    });
+});
+
+app.use((err, req, res, _next) => {
+    const statusCode =
+        err.statusCode ??
+        err.status ??
+        (err.name === "ValidationError" ? 400 : undefined) ??
+        (err.code === 11000 ? 409 : undefined) ??
+        500;
+    const message = err.message || "Internal Server Error";
+    if (statusCode >= 500) {
+        console.error("[API]", req.method, req.originalUrl, err);
+    }
+    res.status(statusCode).json({
+        success: false,
+        statusCode,
+        message,
+        ...(process.env.NODE_ENV !== "production" && statusCode >= 500 && err.stack
+            ? { stack: err.stack.split("\n").slice(0, 8).join("\n") }
+            : {}),
+    });
+});
+
 export { app };

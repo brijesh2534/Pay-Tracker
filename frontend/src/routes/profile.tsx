@@ -8,13 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "../auth";
 import { useState } from "react";
+import { hasStoredSession } from "@/lib/session";
 
 export const Route = createFileRoute("/profile")({
-  beforeLoad: ({ context }) => {
-    if (!context.auth.isAuthenticated) {
-      throw redirect({
-        to: "/login",
-      });
+  beforeLoad: () => {
+    if (!hasStoredSession()) {
+      throw redirect({ to: "/login" });
     }
   },
   head: () => ({

@@ -55,21 +55,25 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const fetchNotifs = async () => {
     if (!isAuthenticated) return;
+    const token = localStorage.getItem("pay_tracker_token");
+    if (!token) return;
     try {
-      const token = localStorage.getItem("pay_tracker_token");
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/notifications`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      const mappedNotifs = response.data.data.map((n: any) => ({
-        ...n,
-        id: n._id,
-        time: new Date(n.createdAt).toLocaleDateString("en-IN", { hour: '2-digit', minute: '2-digit' })
-      }));
-      
+
+      const raw = response.data?.data;
+      const mappedNotifs = Array.isArray(raw)
+        ? raw.map((n: any) => ({
+            ...n,
+            id: n._id,
+            time: new Date(n.createdAt).toLocaleDateString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+          }))
+        : [];
+
       setNotifs(mappedNotifs);
-    } catch (error) {
-      console.error("Failed to fetch notifications");
+    } catch {
+      // Silent: optional endpoint or network; avoid console noise in dev
     }
   };
 

@@ -18,7 +18,7 @@ const getRazorpayInstance = () => {
 
 // Helper to generate email HTML
 const generateReminderEmail = (invoice, user, type) => {
-    const formattedAmount = formatINR(invoice.amount * 1.18);
+    const formattedAmount = formatINR(invoice.totalAmount ?? invoice.amount);
     const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'long', year: 'numeric' });
     
     let title = "";

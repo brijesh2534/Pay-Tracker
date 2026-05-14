@@ -2,10 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Search, FileText, Download, Upload, Loader2, History, Clock, Eye, CheckCircle2 } from "lucide-react";
+import { Search, FileText, Download, Upload, Loader2 } from "lucide-react";
 import { formatINR } from "@/lib/mock";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
 import { StatusBadge } from "@/components/StatusBadge";
 import QRCode from "qrcode";
 import { useAuth } from "../auth";
@@ -24,7 +22,7 @@ function InvoiceSearchPage() {
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const { user } = useAuth();
 
-  const isCreator = user && invoice && user._id === invoice.userId;
+  const isCreator = user && invoice && user._id === (invoice.userId?._id || invoice.userId);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,24 +46,8 @@ function InvoiceSearchPage() {
       setIsLoading(false);
     }
   };
-
   const downloadPDF = () => {
-    const element = document.getElementById("invoice-result");
-    if (!element) return;
-    
-    const opt = {
-      margin: 10,
-      filename: `Invoice_${invoice.invoiceNumber}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
-    };
-
-    toast.promise(html2pdf().from(element).set(opt).save(), {
-      loading: 'Generating PDF...',
-      success: 'PDF downloaded successfully',
-      error: 'Failed to generate PDF'
-    });
+    window.print();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,7 +84,7 @@ function InvoiceSearchPage() {
           <p className="text-muted-foreground text-sm">Enter your details to view, pay, or download your invoice.</p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-card">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-card print:hidden">
           <form onSubmit={handleSearch} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -145,9 +127,14 @@ function InvoiceSearchPage() {
         {invoice && (
           <div id="invoice-result" className="bg-card border border-border rounded-2xl overflow-hidden shadow-pop animate-fade-up">
             <div className="bg-primary/5 p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Invoice Found</div>
-                <h2 className="text-xl font-bold">{invoice.invoiceNumber}</h2>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-xs font-bold text-white uppercase shadow-sm">
+                  {(invoice.userId?.businessName || invoice.userId?.name || "B").split(" ").map((n: any) => n[0] || "").join("").slice(0, 2)}
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-0.5">Invoice Found</div>
+                  <h2 className="text-xl font-bold leading-none">{invoice.invoiceNumber}</h2>
+                </div>
               </div>
               <StatusBadge status={invoice.status.toLowerCase() as any} />
             </div>
@@ -161,12 +148,12 @@ function InvoiceSearchPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Amount Due</div>
-                  <div className="font-extrabold text-2xl text-foreground">{formatINR(invoice.amount)}</div>
-                  <div className="text-xs text-muted-foreground mt-1">Due {new Date(invoice.dueDate).toLocaleDateString()}</div>
+                  <div className="font-extrabold text-2xl text-foreground tabular-nums">{formatINR(invoice.totalAmount || invoice.amount)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Due {new Date(invoice.dueDate).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-top border-border">
+              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-border">
                 {invoice.status === "PAID" ? (
                   <div className="flex-1 bg-success/10 text-success border border-success/20 font-bold py-3 rounded-xl text-center">
                     Payment Received
@@ -186,56 +173,13 @@ function InvoiceSearchPage() {
                 )}
                 <button 
                   onClick={downloadPDF}
-                  className="flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors"
+                  className="flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors print:hidden"
                 >
                   <Download className="h-5 w-5" />
                   Download PDF
                 </button>
               </div>
 
-              {/* Timeline Section */}
-              <div className="pt-6 border-t border-border">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                    <History className="h-4 w-4" />
-                  </div>
-                  <h3 className="font-bold text-base">Invoice Timeline</h3>
-                </div>
-
-                <div className="space-y-6">
-                  {invoice.history?.length > 0 ? (
-                    invoice.history.map((item: any, idx: number) => {
-                      const Icon = item.action === "CREATED" ? FileText : 
-                                   item.action === "VIEWED" ? Eye :
-                                   item.action === "PROOF_UPLOADED" ? Upload :
-                                   item.action === "PAID" ? CheckCircle2 : Clock;
-                      return (
-                        <div key={idx} className="relative flex gap-4">
-                          {idx !== invoice.history.length - 1 && (
-                            <div className="absolute left-[13px] top-[26px] bottom-[-24px] w-0.5 bg-border" />
-                          )}
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                            item.action === "PAID" ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
-                          }`}>
-                            <Icon className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold uppercase tracking-tight">{item.action.replace('_', ' ')}</span>
-                              <span className="text-[9px] text-muted-foreground uppercase">{new Date(item.timestamp).toLocaleString()}</span>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">{item.details}</p>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground italic text-xs">
-                      No history recorded
-                    </div>
-                  )}
-                </div>
-              </div>
 
               <div className="pt-6 border-t border-border">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
@@ -253,7 +197,7 @@ function InvoiceSearchPage() {
                     <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Proof</div>
                     {invoice.paymentProof ? (
                       <div className="relative group rounded-xl overflow-hidden border border-border aspect-video bg-muted">
-                        <img src={invoice.paymentProof} alt="Payment Proof" className="h-full w-full object-cover" />
+                        <img src={invoice.paymentProof} crossOrigin="anonymous" alt="Payment Proof" className="h-full w-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <a href={invoice.paymentProof} target="_blank" rel="noreferrer" className="text-white text-xs font-bold bg-primary/80 px-3 py-1.5 rounded-lg">View Full</a>
                         </div>

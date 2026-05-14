@@ -41,13 +41,34 @@ const createInvoice = asyncHandler(async (req, res) => {
     }
 
     const user = await User.findById(req.user._id);
-    let gstRate = manualGstRate || (user.gstEnabled ? user.defaultGstRate : 0);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const amountNum = Number(amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+        throw new ApiError(400, "Amount must be a positive number");
+    }
+
+    const manualGst = manualGstRate === undefined || manualGstRate === null || manualGstRate === ""
+        ? undefined
+        : Number(manualGstRate);
+    let gstRate =
+        manualGst !== undefined && Number.isFinite(manualGst)
+            ? manualGst
+            : user.gstEnabled
+              ? Number(user.defaultGstRate ?? 0)
+              : 0;
+    if (!Number.isFinite(gstRate) || gstRate < 0) {
+        gstRate = 0;
+    }
+
     let gstAmount = 0;
     let cgst = 0, sgst = 0, igst = 0;
     let taxType = "NONE";
 
-    if (user.gstEnabled || manualGstRate > 0) {
-        gstAmount = (amount * gstRate) / 100;
+    if (user.gstEnabled || (manualGst !== undefined && manualGst > 0)) {
+        gstAmount = (amountNum * gstRate) / 100;
         if (user.businessState === (clientState || user.businessState)) {
             taxType = "CGST_SGST";
             cgst = gstAmount / 2;
@@ -58,7 +79,7 @@ const createInvoice = asyncHandler(async (req, res) => {
         }
     }
 
-    const totalAmount = amount + gstAmount;
+    const totalAmount = amountNum + gstAmount;
 
     // Generate unique invoice number: INV-YEAR-RANDOM
     const date = new Date();
@@ -71,6 +92,7 @@ const createInvoice = asyncHandler(async (req, res) => {
 
     // Generate Razorpay Payment Link
     let paymentLink = "";
+    let razorpayLinkId;
     const razorpayInstance = getRazorpayInstance();
     if (razorpayInstance) {
         try {
@@ -93,7 +115,7 @@ const createInvoice = asyncHandler(async (req, res) => {
                 }
             });
             paymentLink = razorpayResponse.short_url;
-            var razorpayLinkId = razorpayResponse.id;
+            razorpayLinkId = razorpayResponse.id;
         } catch (error) {
             console.error("Razorpay Error:", error);
         }
@@ -104,7 +126,7 @@ const createInvoice = asyncHandler(async (req, res) => {
         clientName,
         clientEmail,
         clientState: clientState || user.businessState,
-        amount, // taxable value
+        amount: amountNum, // taxable value
         gstRate,
         gstAmount,
         cgst,
@@ -129,9 +151,9 @@ const createInvoice = asyncHandler(async (req, res) => {
         throw new ApiError(500, "Something went wrong while creating the invoice");
     }
 
-    // Send Invoice Email
+    // Send Invoice Email (UPI amount must match Razorpay total — inclusive of actual GST, not hardcoded 18%)
     const upiId = req.user?.upiId || "merchant@upi";
-    const totalWithTax = amount * 1.18;
+    const totalWithTax = totalAmount;
     const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(req.user?.businessName || req.user?.name)}&am=${totalWithTax.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Invoice ${invoiceNumber}`)}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
 
@@ -172,19 +194,26 @@ const createInvoice = asyncHandler(async (req, res) => {
         emailHtml
     ).catch(err => console.error("Email sending failed:", err));
 
-    // Log activity for the creator (SME)
-    await logActivity(req.user?._id, "INVOICE_CREATED", `Created invoice ${invoiceNumber} for ${clientName}`);
+    await logActivity({
+        userId: req.user._id,
+        invoiceId: invoice._id,
+        action: "INVOICE_CREATED",
+        details: `Created invoice ${invoiceNumber} for ${clientName}`,
+    });
 
-    // CHECK if client exists on Pay Tracker and send notification
-    const clientUser = await User.findOne({ email: clientEmail });
+    const clientUser = await User.findOne({ email: clientEmail.toLowerCase().trim() });
     if (clientUser) {
-        await Notification.create({
-            userId: clientUser._id,
-            title: "New Invoice Received",
-            description: `${req.user?.businessName || req.user?.name} sent you a new invoice ${invoiceNumber} for ₹${amount}`,
-            type: "info",
-            category: "invoice"
-        });
+        try {
+            await Notification.create({
+                userId: clientUser._id,
+                title: "New Invoice Received",
+                description: `${req.user?.businessName || req.user?.name} sent you a new invoice ${invoiceNumber} for ₹${totalAmount}`,
+                type: "info",
+                category: "invoice",
+            });
+        } catch (e) {
+            console.error("Optional client notification failed:", e.message);
+        }
     }
 
     return res.status(201).json(
@@ -277,7 +306,7 @@ const searchInvoice = asyncHandler(async (req, res) => {
     const invoice = await Invoice.findOne({ 
         invoiceNumber: invoiceNumber.toUpperCase(), 
         clientEmail: email.toLowerCase() 
-    });
+    }).populate("userId", "businessName name upiId gstNumber businessState gstEnabled");
 
     if (!invoice) {
         throw new ApiError(404, "Invoice not found or email mismatch");
@@ -371,10 +400,13 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     invoices.forEach(inv => {
         if (inv.status === "PAID") {
             stats.totalRevenue += inv.amount;
-            if (inv.paidAt && inv.paidAt >= thirtyDaysAgo) {
-                const dateKey = inv.paidAt.toISOString().split('T')[0];
-                if (cashflowMap.has(dateKey)) {
-                    cashflowMap.set(dateKey, cashflowMap.get(dateKey) + inv.amount);
+            if (inv.paidAt) {
+                const paid = inv.paidAt instanceof Date ? inv.paidAt : new Date(inv.paidAt);
+                if (!Number.isNaN(paid.getTime()) && paid >= thirtyDaysAgo) {
+                    const dateKey = paid.toISOString().split("T")[0];
+                    if (cashflowMap.has(dateKey)) {
+                        cashflowMap.set(dateKey, cashflowMap.get(dateKey) + inv.amount);
+                    }
                 }
             }
         } else if (inv.status === "PENDING") {

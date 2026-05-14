@@ -10,18 +10,15 @@ import { useAuth } from "../auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { hasStoredSession } from "@/lib/session";
 
 export const Route = createFileRoute("/admin/dashboard")({
   beforeLoad: ({ context }) => {
-    // Check context first, then fallback to localStorage to handle refresh
     const storedUser = localStorage.getItem("pay_tracker_user");
     const user = context.auth.user || (storedUser ? JSON.parse(storedUser) : null);
-    const isAuthenticated = context.auth.isAuthenticated || !!user;
 
-    if (!isAuthenticated || user?.role !== "ADMIN") {
-      throw redirect({
-        to: "/admin/login",
-      });
+    if (!hasStoredSession() || user?.role !== "ADMIN") {
+      throw redirect({ to: "/admin/login" });
     }
   },
   component: AdminDashboardComponent,
@@ -103,7 +100,7 @@ function AdminDashboardComponent() {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-primary to-primary/60">
             Admin Dashboard
           </h1>
           <p className="text-muted-foreground font-medium">System-wide control and monitoring.</p>
@@ -126,7 +123,7 @@ function AdminDashboardComponent() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-8" onValueChange={(val) => val === 'users' && fetchUsers()}>
-        <TabsList className="bg-muted/50 p-1 rounded-xl h-auto">
+        <TabsList className="bg-muted/50 p-1 rounded-xl h-auto w-full flex flex-nowrap overflow-x-auto sm:overflow-visible justify-start sm:justify-center gap-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger value="overview" className="rounded-lg px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">System Overview</TabsTrigger>
           <TabsTrigger value="users" className="rounded-lg px-6 py-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm">User Management</TabsTrigger>
         </TabsList>
@@ -137,7 +134,7 @@ function AdminDashboardComponent() {
               <Card key={i} className="relative overflow-hidden shadow-glow border-border/50 bg-card/80 backdrop-blur-sm group">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{stat.title}</CardTitle>
-                  <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white shadow-lg`}>
+                  <div className={`h-9 w-9 rounded-xl bg-linear-to-br ${stat.color} flex items-center justify-center text-white shadow-lg`}>
                     <stat.icon className="h-5 w-5" />
                   </div>
                 </CardHeader>

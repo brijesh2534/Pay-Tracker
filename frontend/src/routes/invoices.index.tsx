@@ -233,7 +233,7 @@ function InvoiceList() {
                         <Link
                           to="/pay/$id"
                           params={{ id: inv._id }}
-                          className="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-xs font-medium text-primary max-sm:opacity-100 opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         >
                           View →
                         </Link>

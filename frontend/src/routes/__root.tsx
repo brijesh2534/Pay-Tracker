@@ -37,7 +37,7 @@ function RootComponent() {
   return (
     <div className="min-h-screen bg-background font-sans antialiased">
       <Outlet />
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-center" richColors closeButton className="pt-[max(0.75rem,env(safe-area-inset-top))]" />
     </div>
   );
 }

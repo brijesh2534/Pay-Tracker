@@ -1,14 +1,13 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import QRCode from "qrcode";
 import { formatINR } from "@/lib/mock";
 import { ShieldCheck, Copy, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { useAuth } from "../auth";
 import { AppShell } from "@/components/AppShell";
-import { History, Clock, FileText, CheckCircle2, Eye, Upload, Download } from "lucide-react";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
+import { CheckCircle2, Download } from "lucide-react";
 
 export const Route = createFileRoute("/pay/$id")({
   loader: async ({ params }) => {
@@ -35,11 +34,15 @@ function PublicPay() {
   const { user } = useAuth();
   const isCreator = user && inv && (user._id === (inv.sme?._id || inv.userId?._id || inv.userId));
 
+  const [qrUrl, setQrUrl] = useState("");
   const tax = inv.gstAmount || 0;
   const total = inv.totalAmount || (inv.amount + tax);
   const upiId = inv.userId?.upiId || "merchant@upi";
-  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(inv.sme?.businessName || inv.sme?.name)}&am=${total}&cu=INR&tn=${encodeURIComponent(`Invoice ${inv.invoiceNumber}`)}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUri)}`;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(inv.userId?.businessName || inv.userId?.name || "Merchant")}&am=${total}&cu=INR&tn=${encodeURIComponent(`Invoice ${inv.invoiceNumber}`)}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(upiUri, { width: 400, margin: 1 }).then(setQrUrl).catch(console.error);
+  }, [upiUri]);
 
   const copy = async () => {
     await navigator.clipboard.writeText(upiId);
@@ -47,27 +50,11 @@ function PublicPay() {
     toast.success("UPI ID copied");
     setTimeout(() => setCopied(false), 1500);
   };
-
   const downloadPDF = () => {
-    const element = document.getElementById("invoice-card");
-    if (!element) return;
-    
-    const opt = {
-      margin: 10,
-      filename: `Invoice_${inv.invoiceNumber}.pdf`,
-      image: { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
-    };
-
-    toast.promise(html2pdf().from(element).set(opt).save(), {
-      loading: 'Generating PDF...',
-      success: 'PDF downloaded successfully',
-      error: 'Failed to generate PDF'
-    });
+    window.print();
   };
   return (
-    <AppShell>
+    <AppShell variant={user ? "app" : "minimal"}>
       <div className="max-w-5xl mx-auto py-8">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Invoice card */}
@@ -75,7 +62,9 @@ function PublicPay() {
             <div className="rounded-3xl bg-card border border-border shadow-pop p-6 lg:p-8 animate-fade-up">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <div className="h-10 w-10 rounded-xl gradient-primary mb-3" />
+                  <div className="h-10 w-10 rounded-xl gradient-primary mb-3 flex items-center justify-center text-xs font-bold text-white uppercase">
+                    {(inv.userId?.businessName || inv.userId?.name || "B").split(" ").map((n: any) => n[0]).join("").slice(0, 2)}
+                  </div>
                   <div className="text-lg font-bold tracking-tight">{inv.userId?.businessName || "Business Merchant"}</div>
                   <div className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
                     {inv.userId?.name} {inv.userId?.gstNumber && `· GST: ${inv.userId.gstNumber}`}
@@ -141,51 +130,6 @@ function PublicPay() {
                 </div>
               </div>
             </div>
-
-            {/* Timeline Section */}
-            <div className="rounded-3xl bg-card border border-border p-6 lg:p-8 animate-fade-up" style={{ animationDelay: "200ms" }}>
-              <div className="flex items-center gap-2 mb-6">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                  <History className="h-4 w-4" />
-                </div>
-                <h3 className="font-bold text-lg">Invoice Timeline</h3>
-              </div>
-
-              <div className="space-y-6">
-                {inv.history?.length > 0 ? (
-                  inv.history.map((item: any, idx: number) => {
-                    const Icon = item.action === "CREATED" ? FileText : 
-                                 item.action === "VIEWED" ? Eye :
-                                 item.action === "PROOF_UPLOADED" ? Upload :
-                                 item.action === "PAID" ? CheckCircle2 : Clock;
-                    return (
-                      <div key={idx} className="relative flex gap-4">
-                        {idx !== inv.history.length - 1 && (
-                          <div className="absolute left-[15px] top-[30px] bottom-[-20px] w-0.5 bg-border" />
-                        )}
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                          item.action === "PAID" ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"
-                        }`}>
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 pt-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-bold uppercase tracking-tight">{item.action.replace('_', ' ')}</span>
-                            <span className="text-[10px] text-muted-foreground uppercase">{new Date(item.timestamp).toLocaleString()}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">{item.details}</p>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Clock className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">No history events yet</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Payment card */}
@@ -242,7 +186,7 @@ function PublicPay() {
                 
                 <button 
                   onClick={downloadPDF}
-                  className="w-full mt-4 flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors"
+                  className="w-full mt-4 flex-1 border border-border bg-muted/30 font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-muted/50 transition-colors print:hidden"
                 >
                   <Download className="h-5 w-5" />
                   Download PDF
