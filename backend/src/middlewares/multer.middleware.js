@@ -3,7 +3,9 @@ import path from "path";
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, "./public/temp");
+        // Vercel only allows writing to /tmp
+        const dest = process.env.NODE_ENV === "production" ? "/tmp" : "./public/temp";
+        cb(null, dest);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
