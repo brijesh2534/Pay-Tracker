@@ -30,13 +30,13 @@ app.use(
                 return callback(null, true);
             }
             const normalized = origin.replace(/\/$/, "");
-            if (allowedOrigins.length === 0) {
-                if (process.env.NODE_ENV === "production") {
-                    return callback(null, false);
-                }
-                return callback(null, true);
-            }
-            if (allowedOrigins.includes(normalized)) {
+            
+            // Allow same-origin, local development, or explicitly allowed origins
+            if (
+                allowedOrigins.length === 0 || 
+                allowedOrigins.includes(normalized) ||
+                normalized.includes(".vercel.app") // Automatically trust Vercel deployments
+            ) {
                 return callback(null, true);
             }
             return callback(null, false);
