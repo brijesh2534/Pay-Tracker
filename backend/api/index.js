@@ -6,25 +6,33 @@ let isConnected = false;
 
 const handler = async (req, res) => {
     try {
-        // 1. Establish database connection
-        if (!isConnected) {
-            console.log('Attempting to connect to MongoDB...');
-            await connectDB();
-            isConnected = true;
-            console.log('MongoDB connected successfully.');
+        // 1. Diagnostic: Check if environment variables are loaded
+        const envKeys = Object.keys(process.env);
+        if (!process.env.MONGODB_URI) {
+            return res.status(500).json({ 
+                success: false, 
+                message: 'MONGODB_URI is missing in Vercel.',
+                availableKeys: envKeys.filter(k => !k.includes('SECRET') && !k.includes('KEY')) // Safety check
+            });
         }
 
-        // 2. Handle the request
+        // 2. Establish database connection
+        if (!isConnected) {
+            console.log('Connecting to MongoDB...');
+            await connectDB();
+            isConnected = true;
+        }
+
+        // 3. Handle the request
         return await app(req, res);
     } catch (error) {
-        console.error('Vercel Handler Error:', error);
-        
-        // Return the actual error message to the browser for debugging
+        console.error('SERVER CRASH:', error);
         return res.status(500).json({ 
             success: false, 
             message: 'Internal Server Error',
             error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            stack: error.stack, // Show stack trace for debugging
+            type: error.name
         });
     }
 };
