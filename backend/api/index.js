@@ -5,39 +5,26 @@ import '../src/config.js';
 let isConnected = false;
 
 const handler = async (req, res) => {
-    // 1. Check if required environment variables are present
-    if (!process.env.MONGODB_URI) {
-        console.error('CRITICAL: MONGODB_URI is missing from environment variables.');
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Database configuration missing. Please set MONGODB_URI in Vercel settings.' 
-        });
-    }
-
-    // 2. Establish database connection
-    if (!isConnected) {
-        try {
+    try {
+        // 1. Establish database connection
+        if (!isConnected) {
+            console.log('Attempting to connect to MongoDB...');
             await connectDB();
             isConnected = true;
-            console.log('MongoDB connected successfully in Vercel.');
-        } catch (error) {
-            console.error('MongoDB connection error in Vercel handler:', error.message);
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Database connection failed.',
-                error: process.env.NODE_ENV === 'development' ? error.message : undefined
-            });
+            console.log('MongoDB connected successfully.');
         }
-    }
 
-    // 3. Handle the request
-    try {
+        // 2. Handle the request
         return await app(req, res);
     } catch (error) {
-        console.error('Express App Error:', error.message);
+        console.error('Vercel Handler Error:', error);
+        
+        // Return the actual error message to the browser for debugging
         return res.status(500).json({ 
             success: false, 
-            message: 'Internal Server Error in Express app.' 
+            message: 'Internal Server Error',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
