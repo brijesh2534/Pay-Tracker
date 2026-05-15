@@ -1,6 +1,6 @@
-import { app } from './backend/src/app.js';
-import connectDB from './backend/src/db/index.js';
-import './backend/src/config.js';
+import { app } from '../src/app.js';
+import connectDB from '../src/db/index.js';
+import '../src/config.js';
 
 let isConnected = false;
 
