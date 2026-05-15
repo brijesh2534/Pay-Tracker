@@ -5,8 +5,5 @@
   "workspaces": [
     "frontend",
     "backend"
-  ],
-  "scripts": {
-    "build": "cd frontend && npm install && npm run build"
-  }
+  ]
 }
