@@ -32,7 +32,10 @@ const registerUser = asyncHandler( async (req, res) => {
 
     // Verify if the email actually exists in the real world (SMTP/MX checks)
     try {
-        const { valid, reason, validators } = await emailValidator(email);
+        const { valid, reason, validators } = await emailValidator({
+            email,
+            validateSMTP: false, // SMTP check often fails/times out in many environments
+        });
         if (!valid) {
             const reasonMsg = validators[reason]?.reason || "Invalid or non-existent email address";
             throw new ApiError(400, `Fake email detected: ${reasonMsg}`);
@@ -97,7 +100,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === "production"
     }
 
     return res
@@ -131,7 +134,7 @@ const logoutUser = asyncHandler(async(req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === "production"
     }
 
     return res

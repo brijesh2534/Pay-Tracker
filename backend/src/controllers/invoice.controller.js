@@ -48,7 +48,10 @@ const createInvoice = asyncHandler(async (req, res) => {
 
     // Verify if the client email actually exists in the real world (SMTP/MX checks)
     try {
-        const { valid, reason, validators } = await emailValidator(clientEmail);
+        const { valid, reason, validators } = await emailValidator({
+            email: clientEmail,
+            validateSMTP: false,
+        });
         if (!valid) {
             const reasonMsg = validators[reason]?.reason || "Invalid or non-existent email address";
             throw new ApiError(400, `Fake client email detected: ${reasonMsg}`);
