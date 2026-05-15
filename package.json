@@ -1,26 +1,27 @@
 {
-  "name": "pay-tracker",
+  "name": "pay-tracker-monorepo",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "cd frontend && npm install && npm run build"
-  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "dependencies": {
-    "axios": "^1.15.2",
-    "bcryptjs": "^3.0.3",
-    "cloudinary": "^2.9.0",
+    "axios": "^1.7.9",
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.5.1",
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.6",
+    "cors": "^2.8.5",
     "deep-email-validator": "^0.1.27",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "googleapis": "^171.4.0",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.5.0",
-    "multer": "^2.1.1",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^144.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.10.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.0",
     "qrcode": "^1.5.4",
     "razorpay": "^2.9.6"
   }
