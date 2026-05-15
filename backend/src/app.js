@@ -48,7 +48,10 @@ app.use(
 
 app.use(express.json({limit: "16kb"}));
 app.use(express.urlencoded({extended: true, limit: "16kb"}));
-app.use(express.static("public"));
+// Only use static folder in local development
+if (process.env.NODE_ENV !== "production") {
+    app.use(express.static("public"));
+}
 app.use(cookieParser());
 
 
