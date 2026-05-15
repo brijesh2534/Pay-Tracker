@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import emailValidator from "deep-email-validator";
 
 const generateAccessAndRefereshTokens = async(userId) =>{
     try {
@@ -27,6 +28,19 @@ const registerUser = asyncHandler( async (req, res) => {
         [name, email, password].some((field) => !field || field?.trim() === "")
     ) {
         throw new ApiError(400, "Name, email and password are required")
+    }
+
+    // Verify if the email actually exists in the real world (SMTP/MX checks)
+    try {
+        const { valid, reason, validators } = await emailValidator(email);
+        if (!valid) {
+            const reasonMsg = validators[reason]?.reason || "Invalid or non-existent email address";
+            throw new ApiError(400, `Fake email detected: ${reasonMsg}`);
+        }
+    } catch (err) {
+        // Fallback in case the validator crashes or network error
+        if (err instanceof ApiError) throw err;
+        console.warn("Email validation warning:", err);
     }
 
     try {
@@ -173,10 +187,24 @@ const updateGstSettings = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, user, "GST settings updated successfully"))
 })
 
+const checkEmailExists = asyncHandler(async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+        throw new ApiError(400, "Email query parameter is required");
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    
+    return res.status(200).json(
+        new ApiResponse(200, { exists: !!user }, user ? "Email is registered" : "Email is available")
+    );
+})
+
 export {
     registerUser,
     loginUser,
     logoutUser,
     updateUserDetails,
-    updateGstSettings
+    updateGstSettings,
+    checkEmailExists
 }

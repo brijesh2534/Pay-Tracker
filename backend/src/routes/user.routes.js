@@ -4,7 +4,8 @@ import {
     logoutUser, 
     registerUser,
     updateUserDetails,
-    updateGstSettings
+    updateGstSettings,
+    checkEmailExists
 } from "../controllers/user.controller.js";
 import { getActivityLogs } from "../controllers/activity.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -13,6 +14,7 @@ const router = Router();
 
 router.route("/register").post(registerUser);
 router.route("/login").post(loginUser);
+router.route("/check-email").get(checkEmailExists);
 
 // Secured routes
 router.route("/logout").post(verifyJWT, logoutUser);

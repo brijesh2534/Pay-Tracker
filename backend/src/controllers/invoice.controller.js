@@ -8,6 +8,7 @@ import { logActivity } from "../utils/logger.js";
 import { uploadInCloudinary } from "../utils/cloudinary.js";
 import { User } from "../models/user.model.js";
 import { Notification } from "../models/notification.model.js";
+import emailValidator from "deep-email-validator";
 
 import Razorpay from "razorpay";
 
@@ -43,6 +44,18 @@ const createInvoice = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) {
         throw new ApiError(404, "User not found");
+    }
+
+    // Verify if the client email actually exists in the real world (SMTP/MX checks)
+    try {
+        const { valid, reason, validators } = await emailValidator(clientEmail);
+        if (!valid) {
+            const reasonMsg = validators[reason]?.reason || "Invalid or non-existent email address";
+            throw new ApiError(400, `Fake client email detected: ${reasonMsg}`);
+        }
+    } catch (err) {
+        if (err instanceof ApiError) throw err;
+        console.warn("Client email validation warning:", err);
     }
 
     const amountNum = Number(amount);

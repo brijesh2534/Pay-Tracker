@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import axios from "axios";
 import { useAuth } from "../auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,20 @@ function RegisterComponent() {
     }
   }
 
+  const checkEmail = async (email: string) => {
+    if (!email || !email.includes('@')) return;
+    try {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/users/check-email?email=${email}`);
+      if (res.data?.data?.exists) {
+        form.setError("email", { type: "manual", message: "Email is already registered" });
+      } else {
+        form.clearErrors("email");
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="h-16 flex items-center px-6 border-b gap-3">
@@ -101,7 +116,14 @@ function RegisterComponent() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="name@example.com" {...field} />
+                        <Input 
+                          placeholder="name@example.com" 
+                          {...field} 
+                          onBlur={(e) => {
+                            field.onBlur();
+                            checkEmail(e.target.value);
+                          }}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
